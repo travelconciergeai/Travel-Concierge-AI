@@ -1,13 +1,27 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Icon } from "../icons.jsx";
 import { mockData } from "../mockData.jsx";
+import { getStoredHotelSearchResults, subscribeHotelSearchResults } from "../lib/hotelSearchState.js";
 import { Placeholder, Button, Card, Drawer, Modal, OptimizeMenu, SectionHeader, SmartImg, Stat, TabRow, Tag, Topbar, useToast } from "../ui.jsx";
 
 // Hotels — Voya Collection editorial.
 
 const HotelsScreen = ({ setRoute }) => {
   const [open, setOpen] = useState(null);
+  const [searchHotels, setSearchHotels] = useState(() => getStoredHotelSearchResults());
   const toast = useToast();
+  const hotels = searchHotels.length ? searchHotels : mockData.hotels;
+
+  useEffect(() => subscribeHotelSearchResults(setSearchHotels), []);
+
+  const openBooking = (hotel) => {
+    if (hotel.bookingUrl) {
+      window.open(hotel.bookingUrl, '_blank', 'noopener,noreferrer');
+      return;
+    }
+    toast({title:'Reserva enviada', tone:'success', desc:`${hotel.name} · ${hotel.nights} noites`});
+  };
+
   return (
     <div className="min-h-screen">
       <Topbar subtitle="Voya · Hotéis" title="Voya Collection"
@@ -15,13 +29,13 @@ const HotelsScreen = ({ setRoute }) => {
                   <Button variant="secondary" icon={Icon.MapPin}>Mapa</Button></>}/>
 
       <div className="px-10 pb-12 grid grid-cols-3 gap-5">
-        {mockData.hotels.map(h => (
+        {hotels.map(h => (
           <Card key={h.id} hover className="overflow-hidden" onClick={() => setOpen(h)}>
-            <SmartImg seed={`hotel-${h.id}`} tone={h.tone} label={h.city} w={600} h={400} className="h-[200px]"/>
+            <SmartImg seed={`hotel-${h.id}`} src={h.image} tone={h.tone} label={h.city} w={600} h={400} className="h-[200px]"/>
             <div className="p-5">
               <div className="flex items-center justify-between">
                 <Tag tone="gold">{h.tag}</Tag>
-                <div className="text-[12px] text-ink-700 inline-flex items-center gap-1"><Icon.Star size={11}/> {h.rating}</div>
+                <div className="text-[12px] text-ink-700 inline-flex items-center gap-1"><Icon.Star size={11}/> {h.rating}{h.reviewCount ? ` · ${h.reviewCount.toLocaleString('pt-BR')}` : ''}</div>
               </div>
               <div className="text-[16px] font-medium text-ink-900 mt-3">{h.name}</div>
               <div className="text-[12px] text-ink-500 mt-0.5 flex items-center gap-1.5"><Icon.MapPin size={11}/> {h.city}</div>
@@ -39,14 +53,14 @@ const HotelsScreen = ({ setRoute }) => {
         footer={open && <>
           <Button variant="ghost" onClick={()=>setOpen(null)}>Fechar</Button>
           <Button icon={Icon.Heart} variant="secondary">Salvar</Button>
-          <Button icon={Icon.Check} onClick={()=>{setOpen(null); toast({title:'Reserva enviada', tone:'success', desc:`${open.name} · ${open.nights} noites`});}}>
+          <Button icon={Icon.Check} onClick={()=>{openBooking(open); setOpen(null);}}>
             Reservar
           </Button>
         </>}>
         {open && (
           <div className="space-y-5">
             <div className="grid grid-cols-2 gap-3">
-              <SmartImg seed={`hotel-cover-${open.id}`} tone={open.tone} label={open.city} w={600} h={400} className="h-[200px] rounded-xl"/>
+              <SmartImg seed={`hotel-cover-${open.id}`} src={open.image} tone={open.tone} label={open.city} w={600} h={400} className="h-[200px] rounded-xl"/>
               <div className="grid grid-cols-2 gap-3">
                 <SmartImg seed={`hotel-${open.id}-1`} tone="warm" w={400} h={400} className="rounded-xl aspect-square"/>
                 <SmartImg seed={`hotel-${open.id}-2`} tone="cool" w={400} h={400} className="rounded-xl aspect-square"/>

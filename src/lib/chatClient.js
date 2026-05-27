@@ -20,6 +20,7 @@ export async function sendChatMessage({ message, messages = [] }) {
       reply: data.reply || clientFallback(message),
       source: data.source || 'unknown',
       tools: data.tools || {},
+      toolCalls: data.toolCalls || [],
     };
   } catch (error) {
     return {

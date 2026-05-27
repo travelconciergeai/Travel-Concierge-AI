@@ -438,12 +438,12 @@ const OptimizeMenu = ({ onApply, anchor = 'right' }) => {
 // Uses picsum.photos (stable, public) with ?grayscale to keep the palette neutral.
 // If the network/CDN fails, we fall back to the striped Placeholder so design
 // never breaks.
-const SmartImg = ({ seed, w = 800, h = 500, tone = 'warm', label, className = '', children, eager = false }) => {
+const SmartImg = ({ seed, src, w = 800, h = 500, tone = 'warm', label, className = '', children, eager = false }) => {
   const [failed, setFailed] = useState(false);
-  if (failed || !seed) {
+  if (failed || (!seed && !src)) {
     return <Placeholder tone={tone} label={label} className={className}>{children}</Placeholder>;
   }
-  const url = `https://picsum.photos/seed/${encodeURIComponent(seed)}/${w}/${h}?grayscale`;
+  const url = src || `https://picsum.photos/seed/${encodeURIComponent(seed)}/${w}/${h}?grayscale`;
   return (
     <div className={`relative overflow-hidden bg-ink-200 ${className}`}>
       <img src={url} onError={() => setFailed(true)}
