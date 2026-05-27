@@ -1,3 +1,8 @@
+import React, { useEffect, useRef, useState } from "react";
+import { Icon } from "../icons.jsx";
+import { mockData } from "../mockData.jsx";
+import { Placeholder, Button, Card, Drawer, Modal, OptimizeMenu, SectionHeader, SmartImg, Stat, TabRow, Tag, Topbar, useToast } from "../ui.jsx";
+
 // Miles — programs + transfer planner + opportunities.
 
 const MilesScreen = ({ setRoute }) => {
@@ -134,3 +139,4 @@ const Opp = ({ tone, title, desc }) => (
 );
 
 window.MilesScreen = MilesScreen;
+export { MilesScreen };

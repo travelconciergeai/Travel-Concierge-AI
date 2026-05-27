@@ -1,3 +1,12 @@
+import React, { useEffect, useRef, useState } from "react";
+import { Icon } from "../icons.jsx";
+import { mockData } from "../mockData.jsx";
+import { Placeholder, Button, Card, Drawer, Modal, OptimizeMenu, SectionHeader, SmartImg, Stat, TabRow, Tag, Topbar, useToast } from "../ui.jsx";
+import { sendChatMessage } from "../lib/chatClient.js";
+import { planChatFallbackReply } from "../lib/planChatFallback.js";
+import { clonePlanState } from "../lib/planState.js";
+import { applyPlanAgentUpdate } from "../services/planVisualUpdateService.js";
+
 // Plan screen — chat at left, live timeline at right.
 // Itinerary is fully editable: add/remove items, change time slot, replace activity.
 
@@ -6,11 +15,13 @@ const slotIcon = { 'manhã': Icon.Sun, 'tarde': Icon.Sunset, 'noite': Icon.Moon 
 const PlanScreen = ({ kickoff, clearKickoff, setRoute, trip }) => {
   const toast = useToast();
   const tripData = trip || mockData.trip;
+  const [planTrip, setPlanTrip] = useState(() => clonePlanState(tripData));
   const [tab, setTab] = useState('roteiro');
   const [chat, setChat] = useState(() => [...mockData.chatSeed]);
   const [typing, setTyping] = useState(false);
   const [draft, setDraft] = useState('');
-  const [days, setDays] = useState(() => JSON.parse(JSON.stringify(tripData.days)));
+  const [days, setDays] = useState(() => clonePlanState(tripData.days));
+  const [insights, setInsights] = useState(() => clonePlanState(tripData.insights));
   const [editing, setEditing] = useState(null);
   const [adding, setAdding] = useState(null);
   const [shareOpen, setShareOpen] = useState(false);
@@ -21,7 +32,9 @@ const PlanScreen = ({ kickoff, clearKickoff, setRoute, trip }) => {
 
   // If trip changes (user came in with a different generated trip), reset state.
   useEffect(() => {
-    setDays(JSON.parse(JSON.stringify(tripData.days)));
+    setPlanTrip(clonePlanState(tripData));
+    setDays(clonePlanState(tripData.days));
+    setInsights(clonePlanState(tripData.insights));
     setChat([...mockData.chatSeed]);
     setActiveMode(null);
     setEditing(null);
@@ -54,24 +67,29 @@ const PlanScreen = ({ kickoff, clearKickoff, setRoute, trip }) => {
     return () => clearTimeout(t);
   }, [kickoff]);
 
-  const send = (txt) => {
+  const send = async (txt) => {
     const t = (txt || draft).trim();
     if (!t) return;
-    setChat(c => [...c, { who: 'user', text: t }]);
+    const nextChat = [...chat, { who: 'user', text: t }];
+    setChat(nextChat);
     setDraft('');
     setTyping(true);
-    setTimeout(() => {
-      setTyping(false);
-      setChat(c => [...c, { who: 'voya', text: replyFor(t) }]);
-    }, 950);
-  };
-
-  const replyFor = (t) => {
-    const s = t.toLowerCase();
-    if (s.includes('barato') || s.includes('econom')) return 'Posso revisar pra Memmo Príncipe Real (-R$ 1.100) e trocar o jantar do Avillez por uma tasca em Alfama. Mantenho o Six Senses no Douro. Topa?';
-    if (s.includes('criança') || s.includes('filho') || s.includes('família')) return 'Posso adicionar uma criança ao roteiro. Ajusto Sintra para meio período, troco fado por aquário de Lisboa e reservo quarto twin no Memmo. Aplicar?';
-    if (s.includes('milhas') || s.includes('miles')) return 'Olha só: dá pra emitir GRU→LIS com 78.000 milhas TAP + R$ 240 de taxa. Economia de R$ 4.580 vs. pago. Aplicar essa estratégia?';
-    return 'Anotado. Já refleti isso no roteiro à direita — qualquer ajuste fino, é só pedir.';
+    const response = await sendChatMessage({
+      message: t,
+      messages: nextChat.map((m) => ({
+        role: m.who === 'user' ? 'user' : 'assistant',
+        content: m.text,
+      })).filter((m) => m.content),
+    });
+    setTyping(false);
+    const visualUpdate = applyPlanAgentUpdate({ text: t, days, trip: planTrip, insights });
+    if (visualUpdate) {
+      setDays(visualUpdate.days);
+      setPlanTrip(visualUpdate.trip);
+      setInsights(visualUpdate.insights);
+      toast({ title: 'Roteiro atualizado', tone: 'success', desc: visualUpdate.notes.join(' · ') });
+    }
+    setChat(c => [...c, { who: 'voya', text: response.reply || planChatFallbackReply(t) }]);
   };
 
   // ---- itinerary actions ----
@@ -160,13 +178,13 @@ const PlanScreen = ({ kickoff, clearKickoff, setRoute, trip }) => {
 
       {/* ---- RIGHT: timeline ---- */}
       <section className="overflow-y-auto bg-canvas">
-        <PlanHeader trip={tripData} days={days}
+        <PlanHeader trip={planTrip} days={days}
                     activeMode={activeMode}
                     onApplyMode={applyMode}
                     onShare={() => setShareOpen(true)}
                     onCalendar={() => setCalOpen(true)}
                     onExport={() => setExportOpen(true)}/>
-        <Insights insights={tripData.insights}/>
+        <Insights insights={insights}/>
         <Timeline
           days={days}
           onAdd={(dayIdx, slot) => setAdding({ dayIdx, slot })}
@@ -194,7 +212,7 @@ const PlanScreen = ({ kickoff, clearKickoff, setRoute, trip }) => {
       />
       <ShareModal open={shareOpen} onClose={() => setShareOpen(false)} />
       <CalendarModal open={calOpen} onClose={() => setCalOpen(false)} days={days} />
-      <ExportModal open={exportOpen} onClose={() => setExportOpen(false)} trip={mockData.trip} days={days}/>
+      <ExportModal open={exportOpen} onClose={() => setExportOpen(false)} trip={planTrip} days={days}/>
     </div>
   );
 };
@@ -824,3 +842,4 @@ const ChkRow = ({ label, defaultOn }) => {
 };
 
 window.PlanScreen = PlanScreen;
+export { PlanScreen };

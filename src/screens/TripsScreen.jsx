@@ -1,3 +1,8 @@
+import React, { useEffect, useRef, useState } from "react";
+import { Icon } from "../icons.jsx";
+import { mockData } from "../mockData.jsx";
+import { Placeholder, Button, Card, Drawer, Modal, OptimizeMenu, SectionHeader, SmartImg, Stat, TabRow, Tag, Topbar, useToast } from "../ui.jsx";
+
 // My Trips — list across states: active, planning, idea, completed.
 
 const TripsScreen = ({ setRoute }) => {
@@ -77,3 +82,4 @@ function mapState(s) {
 }
 
 window.TripsScreen = TripsScreen;
+export { TripsScreen };

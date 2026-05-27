@@ -1,4 +1,18 @@
 // App shell — routes, sidebar, keyboard shortcuts.
+import React, { useEffect, useState } from 'react';
+import { mockData } from './mockData.jsx';
+import { CmdPalette, Sidebar, ToastProvider } from './ui.jsx';
+import { HomeScreen } from './screens/HomeScreen.jsx';
+import { PlanScreen } from './screens/PlanScreen.jsx';
+import { WalletScreen } from './screens/WalletScreen.jsx';
+import { MilesScreen } from './screens/MilesScreen.jsx';
+import { ExpertsScreen } from './screens/ExpertsScreen.jsx';
+import { ExploreScreen } from './screens/ExploreScreen.jsx';
+import { TripsScreen } from './screens/TripsScreen.jsx';
+import { FlightsScreen } from './screens/FlightsScreen.jsx';
+import { HotelsScreen } from './screens/HotelsScreen.jsx';
+import { ToursScreen } from './screens/ToursScreen.jsx';
+import { PlansScreen } from './screens/PlansScreen.jsx';
 
 const App = () => {
   const [route, setRoute] = useState('home');
@@ -54,5 +68,4 @@ const App = () => {
   );
 };
 
-const root = ReactDOM.createRoot(document.getElementById('root'));
-root.render(<App />);
+export default App;

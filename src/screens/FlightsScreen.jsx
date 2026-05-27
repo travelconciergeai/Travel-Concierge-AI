@@ -1,3 +1,8 @@
+import React, { useEffect, useRef, useState } from "react";
+import { Icon } from "../icons.jsx";
+import { mockData } from "../mockData.jsx";
+import { Placeholder, Button, Card, Drawer, Modal, OptimizeMenu, SectionHeader, SmartImg, Stat, TabRow, Tag, Topbar, useToast } from "../ui.jsx";
+
 // Flights — list + miles compare. NO copyrighted airline UIs, original layout.
 
 const FlightsScreen = ({ setRoute }) => {
@@ -128,3 +133,4 @@ const Mini3 = ({ label, value, tone }) => (
 );
 
 window.FlightsScreen = FlightsScreen;
+export { FlightsScreen };

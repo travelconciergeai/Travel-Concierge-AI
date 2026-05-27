@@ -1,3 +1,8 @@
+import React, { useEffect, useRef, useState } from "react";
+import { Icon } from "../icons.jsx";
+import { mockData } from "../mockData.jsx";
+import { Placeholder, Button, Card, Drawer, Modal, OptimizeMenu, SectionHeader, SmartImg, Stat, TabRow, Tag, Topbar, useToast } from "../ui.jsx";
+
 // Home — conversational landing.
 // Two modes:
 //   • 'idle': hero with centered chatbar + starters carousel + cards below
@@ -721,3 +726,4 @@ const StartersBoard = ({ onPick }) => {
 };
 
 window.HomeScreen = HomeScreen;
+export { HomeScreen };

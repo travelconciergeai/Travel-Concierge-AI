@@ -1,5 +1,6 @@
 // Tiny Lucide-style inline SVG icons (consistent stroke, 1.6 weight)
 // Used everywhere so we don't depend on lucide DOM-init quirks inside React.
+import React from 'react';
 
 const I = ({ d, size = 18, stroke = 1.6, fill = 'none', className = '', children }) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill={fill}
@@ -68,3 +69,5 @@ const Icon = {
 };
 
 window.Icon = Icon;
+
+export { Icon };

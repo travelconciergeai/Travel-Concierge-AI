@@ -1,3 +1,8 @@
+import React, { useEffect, useRef, useState } from "react";
+import { Icon } from "../icons.jsx";
+import { mockData } from "../mockData.jsx";
+import { Placeholder, Button, Card, Drawer, Modal, OptimizeMenu, SectionHeader, SmartImg, Stat, TabRow, Tag, Topbar, useToast } from "../ui.jsx";
+
 // Wallet — cards, miles overview, benefits. Must NOT feel like a bank.
 // Style: editorial premium, generous spacing, sophisticated cards as objects.
 
@@ -210,3 +215,4 @@ const BestRow = ({ icon: Ic, label, card, perk }) => (
 );
 
 window.WalletScreen = WalletScreen;
+export { WalletScreen };

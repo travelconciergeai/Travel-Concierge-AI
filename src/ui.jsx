@@ -1,6 +1,7 @@
 // Shared UI primitives for Voya. Keep these small + composable.
 
-const { useState, useEffect, useRef, useMemo, useCallback, createContext, useContext } = React;
+import React, { useState, useEffect, useRef, useMemo, useCallback, createContext, useContext } from 'react';
+import { Icon } from './icons.jsx';
 
 // ---------- Placeholder "photography" ----------
 // We never draw real imagery; show striped placeholders with a caption.
@@ -497,3 +498,23 @@ Object.assign(window, {
   CmdPalette, Stat, TabRow,
   OptimizeMenu, OPTIMIZE_MODES,
 });
+
+export {
+  Placeholder,
+  Button,
+  Tag,
+  Card,
+  Modal,
+  Drawer,
+  SmartImg,
+  ToastProvider,
+  useToast,
+  Sidebar,
+  Topbar,
+  SectionHeader,
+  CmdPalette,
+  Stat,
+  TabRow,
+  OptimizeMenu,
+  OPTIMIZE_MODES,
+};

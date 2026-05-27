@@ -1,3 +1,8 @@
+import React, { useEffect, useRef, useState } from "react";
+import { Icon } from "../icons.jsx";
+import { mockData } from "../mockData.jsx";
+import { Placeholder, Button, Card, Drawer, Modal, OptimizeMenu, SectionHeader, SmartImg, Stat, TabRow, Tag, Topbar, useToast } from "../ui.jsx";
+
 // Experts — editorial creator-economy feel. Portrait + stats cards + region filters.
 
 const ExpertsScreen = ({ setRoute, initialOpen, clearInitialOpen }) => {
@@ -304,3 +309,4 @@ const Mini = ({ label, value, tone }) => (
 
 window.ExpertsScreen = ExpertsScreen;
 window.RouteDetailDrawer = RouteDetailDrawer;
+export { ExpertsScreen, RouteDetailDrawer };
