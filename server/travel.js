@@ -17,7 +17,7 @@ function sendJson(res, status, data) {
 
 function createHandlers(env = process.env) {
   return {
-    '/api/travel/flights': (body) => searchFlights(body),
+    '/api/travel/flights': (body) => searchFlights({ ...body, env }),
     '/api/travel/hotels': (body) => searchHotels({ ...body, env }),
     '/api/travel/tours': (body) => searchTours(body),
   };

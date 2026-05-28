@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Icon } from "../icons.jsx";
 import { mockData } from "../mockData.jsx";
+import { getStoredFlightSearchResults, subscribeFlightSearchResults } from "../lib/flightSearchState.js";
 import { Placeholder, Button, Card, Drawer, Modal, OptimizeMenu, SectionHeader, SmartImg, Stat, TabRow, Tag, Topbar, useToast } from "../ui.jsx";
 
 // Flights — list + miles compare. NO copyrighted airline UIs, original layout.
@@ -8,12 +9,24 @@ import { Placeholder, Button, Card, Drawer, Modal, OptimizeMenu, SectionHeader, 
 const FlightsScreen = ({ setRoute }) => {
   const [sort, setSort] = useState('best');
   const [picked, setPicked] = useState(null);
+  const [searchFlights, setSearchFlights] = useState(() => getStoredFlightSearchResults());
   const toast = useToast();
-  const ordered = [...mockData.flights].sort((a,b) => {
-    if (sort === 'price') return parseInt(a.price.replace(/\D/g,'')) - parseInt(b.price.replace(/\D/g,''));
+  const flights = searchFlights.length ? searchFlights : mockData.flights;
+  const ordered = [...flights].sort((a,b) => {
+    if (sort === 'price') return (parseInt(a.price.replace(/\D/g,'')) || 999999999) - (parseInt(b.price.replace(/\D/g,'')) || 999999999);
     if (sort === 'time') return a.dep.localeCompare(b.dep);
     return 0;
   });
+
+  useEffect(() => subscribeFlightSearchResults(setSearchFlights), []);
+
+  const openBooking = (flight) => {
+    if (flight.bookingUrl) {
+      window.open(flight.bookingUrl, '_blank', 'noopener,noreferrer');
+      return;
+    }
+    toast({title:'Voo reservado', tone:'success', desc:`${flight.airline} ${flight.flight} confirmado`});
+  };
 
   return (
     <div className="min-h-screen">
@@ -86,13 +99,13 @@ const FlightsScreen = ({ setRoute }) => {
         footer={picked && <>
           <Button variant="ghost" onClick={()=>setPicked(null)}>Fechar</Button>
           <Button variant="secondary" icon={Icon.Coins}>Usar milhas</Button>
-          <Button icon={Icon.Check} onClick={() => { setPicked(null); toast({title:'Voo reservado', tone:'success', desc:`${picked.airline} ${picked.flight} confirmado`}); }}>Reservar</Button>
+          <Button icon={Icon.Check} onClick={() => { openBooking(picked); setPicked(null); }}>Reservar</Button>
         </>}>
         {picked && (
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
-              <Mini3 label="Cabine" value="Executiva"/>
-              <Mini3 label="Bagagem" value="2 × 32 kg" tone="sage"/>
+              <Mini3 label="Cabine" value={picked.cabin || "Executiva"}/>
+              <Mini3 label="Bagagem" value={picked.baggage || "2 × 32 kg"} tone="sage"/>
               <Mini3 label="Seguro Voya" value="Ativo" tone="sage"/>
               <Mini3 label="Refeição" value="Premium"/>
             </div>
@@ -103,7 +116,7 @@ const FlightsScreen = ({ setRoute }) => {
             <div>
               <div className="label mb-2">Mesma rota — comparar</div>
               <div className="space-y-1.5">
-                {mockData.flights.filter(x=>x.id!==picked.id).map(x => (
+                {ordered.filter(x=>x.id!==picked.id).map(x => (
                   <div key={x.id} className="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-ink-50">
                     <Placeholder tone={x.tone} className="h-7 w-7 rounded-md"/>
                     <div className="flex-1 text-[12.5px] text-ink-700">{x.airline} · {x.dep} → {x.arr} · {x.stops}</div>

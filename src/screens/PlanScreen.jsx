@@ -6,6 +6,7 @@ import { sendChatMessage } from "../lib/chatClient.js";
 import { planChatFallbackReply } from "../lib/planChatFallback.js";
 import { clonePlanState } from "../lib/planState.js";
 import { saveHotelSearchResults } from "../lib/hotelSearchState.js";
+import { saveFlightSearchResults } from "../lib/flightSearchState.js";
 import { applyPlanAgentUpdate } from "../services/planVisualUpdateService.js";
 
 // Plan screen — chat at left, live timeline at right.
@@ -85,6 +86,9 @@ const PlanScreen = ({ kickoff, clearKickoff, setRoute, trip }) => {
     setTyping(false);
     if (response.tools?.buscarHoteis?.options?.length) {
       saveHotelSearchResults(response.tools.buscarHoteis.options);
+    }
+    if (response.tools?.buscarVoos?.options?.length) {
+      saveFlightSearchResults(response.tools.buscarVoos.options);
     }
     const visualUpdate = applyPlanAgentUpdate({ text: t, days, trip: planTrip, insights });
     if (visualUpdate) {

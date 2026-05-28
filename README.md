@@ -82,7 +82,7 @@ AMADEUS_HOTEL_API_KEY=
 EXPEDIA_API_KEY=
 BOOKING_AFFILIATE_ID=
 RAPIDAPI_KEY=
-RAPIDAPI_HOST=booking-com15.p.rapidapi.com
+HOTEL_RAPIDAPI_HOST=booking-com15.p.rapidapi.com
 ```
 
 Para o fluxo real inicial com Amadeus/genérico:
@@ -102,7 +102,7 @@ Para usar Booking COM via RapidAPI:
 ```text
 HOTEL_PROVIDER=booking
 RAPIDAPI_KEY=
-RAPIDAPI_HOST=booking-com15.p.rapidapi.com
+HOTEL_RAPIDAPI_HOST=booking-com15.p.rapidapi.com
 ```
 
 O adapter Booking COM usa:
@@ -117,7 +117,7 @@ Na Vercel, cadastre essas variáveis em Project Settings > Environment Variables
 ```text
 HOTEL_PROVIDER=booking
 RAPIDAPI_KEY=...
-RAPIDAPI_HOST=booking-com15.p.rapidapi.com
+HOTEL_RAPIDAPI_HOST=booking-com15.p.rapidapi.com
 ```
 
 As variáveis antigas abaixo podem ser mantidas apenas para compatibilidade temporária:
@@ -141,7 +141,24 @@ O buscador de voos organiza:
 
 Sem provider real, a Voya retorna voos simulados no formato normalizado.
 
-Variáveis preparadas para providers futuros:
+Para usar Flights Scraper Sky via RapidAPI:
+
+```text
+FLIGHT_PROVIDER=rapidapi
+RAPIDAPI_KEY=
+FLIGHT_RAPIDAPI_HOST=flights-sky.p.rapidapi.com
+```
+
+Se a API real falhar ou não retornar opções, a Voya mantém o fallback mockado atual para voos e sinaliza `fallbackFrom`/`fallbackReason` no payload.
+
+O adapter RapidAPI usa:
+
+- `GET /flights/search-roundtrip` quando houver data de volta
+- `GET /flights/search-one-way` para busca de ida
+- `GET /flights/detail` fica reservado para enriquecimento futuro
+- `GET /flights/airports` fica reservado para resolução futura de aeroportos
+
+Variáveis preparadas para outros providers:
 
 ```text
 FLIGHT_PROVIDER=mock

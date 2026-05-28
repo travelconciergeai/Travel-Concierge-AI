@@ -2,6 +2,7 @@ import { searchMockFlights } from '../integrations/flights/providers/mockFlightP
 import { searchAmadeusFlights } from '../integrations/flights/providers/amadeusFlightProvider.js';
 import { searchDuffelFlights } from '../integrations/flights/providers/duffelFlightProvider.js';
 import { searchLatamFlights } from '../integrations/flights/providers/latamFlightProvider.js';
+import { searchRapidApiFlights } from '../integrations/flights/providers/rapidapiFlightProvider.js';
 import { normalizeFlights } from './flightNormalizer.js';
 import { rankFlightOptions } from './flightRecommendationService.js';
 
@@ -10,6 +11,7 @@ const providerAdapters = {
   amadeus: searchAmadeusFlights,
   duffel: searchDuffelFlights,
   latam: searchLatamFlights,
+  rapidapi: searchRapidApiFlights,
 };
 
 function sortOptionsByRanking(options, ranking) {
@@ -22,7 +24,16 @@ async function runProvider(providerName, query, env) {
   const result = await adapter({ ...query, env });
 
   if (!result.flights?.length && providerName !== 'mock') {
-    return searchMockFlights(query);
+    const fallback = await searchMockFlights(query);
+    return {
+      ...fallback,
+      provider: 'mock',
+      status: 'mocked',
+      fallbackFrom: providerName,
+      fallbackReason: result.errorMessage || result.reason || 'Provider real sem dados disponíveis.',
+      providerErrorStatus: result.errorStatus || null,
+      providerEndpoint: result.endpoint || null,
+    };
   }
 
   return result;
@@ -59,6 +70,9 @@ export async function searchFlightsWithEngine({
     bestPrice: ranking.recommendations.bestPrice,
     bestMiles: ranking.recommendations.bestMiles,
     bestFamily: ranking.recommendations.bestFamily,
+    fallbackFrom: providerResult.fallbackFrom || null,
+    fallbackReason: providerResult.fallbackReason || null,
+    providerEndpoints: providerResult.endpoints || [],
     source: 'flight-search-engine',
   };
 }

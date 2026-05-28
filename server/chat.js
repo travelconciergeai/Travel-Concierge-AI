@@ -163,7 +163,7 @@ function fallbackReply(message, tools) {
   if (toolNames.includes('buscarHoteis')) {
     const hotelTool = tools.buscarHoteis || {};
     if (hotelTool.status === 'not-configured') {
-      return 'Hotel provider não configurado. Para buscar hotéis reais, preencha HOTEL_PROVIDER e as chaves do provider escolhido, como RAPIDAPI_KEY e RAPIDAPI_HOST para Booking/RapidAPI.';
+      return 'Hotel provider não configurado. Para buscar hotéis reais, preencha HOTEL_PROVIDER, RAPIDAPI_KEY e HOTEL_RAPIDAPI_HOST para Booking/RapidAPI.';
     }
     if (hotelTool.status === 'error') {
       return 'Não foi possível consultar hotéis reais agora. Não vou inventar hotéis: tente novamente em alguns minutos ou revise a configuração do provider.';
@@ -219,6 +219,7 @@ function buildStructuredContext({ intent, latestMessage, tools }) {
       'Inclua bookingUrl quando existir.',
       'Se não houver dados reais de hotéis, diga que não conseguiu consultar hotéis reais agora.',
       'Se toolResults tiver status mocked, mencione que os dados ainda são mockados.',
+      'Para voos, cite opções presentes em toolResults.buscarVoos.options e explique custo-benefício, duração, escalas, família e milhas.',
     ],
   };
 }

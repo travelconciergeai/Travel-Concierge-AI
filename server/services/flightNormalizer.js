@@ -20,6 +20,8 @@ function parseMoney(value) {
 function parseDurationToMinutes(value) {
   if (typeof value === 'number') return value;
   const text = String(value || '').toLowerCase();
+  const iso = text.match(/pt(?:(\d+)h)?(?:(\d+)m)?/i);
+  if (iso) return (Number(iso[1] || 0) * 60) + Number(iso[2] || 0);
   const hours = Number.parseFloat(text.match(/(\d+(?:[,.]\d+)?)\s*h/)?.[1]?.replace(',', '.') || '0');
   const minutes = Number.parseFloat(text.match(/(\d+)\s*min/)?.[1] || '0');
   return Math.round(hours * 60 + minutes);
@@ -36,6 +38,7 @@ export function normalizeFlight(rawFlight = {}, { provider = 'mock', origin = 'G
   const priceValue = rawFlight.price ?? rawFlight.amount ?? rawFlight.totalPrice;
   const flightNumber = rawFlight.flightNumber || rawFlight.flight || rawFlight.number || 'Voo sugerido';
   const durationMinutes = Number(rawFlight.durationMinutes) || parseDurationToMinutes(rawFlight.duration);
+  const cabinClass = rawFlight.cabinClass || rawFlight.cabin || rawFlight.class || 'economy';
 
   return {
     id: String(rawFlight.id || rawFlight.offerId || `${provider}-${flightNumber}`),
@@ -46,6 +49,9 @@ export function normalizeFlight(rawFlight = {}, { provider = 'mock', origin = 'G
     destination: rawFlight.destination || rawFlight.route?.split('-')?.at?.(-1) || destination,
     departureTime: rawFlight.departureTime || rawFlight.departure || null,
     arrivalTime: rawFlight.arrivalTime || rawFlight.arrival || null,
+    departure: rawFlight.departure || rawFlight.departureTime || null,
+    arrival: rawFlight.arrival || rawFlight.arrivalTime || null,
+    duration: rawFlight.duration || (durationMinutes ? `${Math.floor(durationMinutes / 60)}h ${durationMinutes % 60}min` : null),
     durationMinutes,
     stops: Number(rawFlight.stops || rawFlight.connections || 0),
     stopoverInfo: rawFlight.stopoverInfo || rawFlight.connectionInfo || (Number(rawFlight.stops || 0) === 0 ? 'Direto' : 'Conexão a confirmar'),
@@ -54,12 +60,14 @@ export function normalizeFlight(rawFlight = {}, { provider = 'mock', origin = 'G
     milesPrice: rawFlight.milesPrice || rawFlight.miles || null,
     walletBenefits: normalizeList(rawFlight.walletBenefits || rawFlight.benefits),
     baggageIncluded: rawFlight.baggageIncluded || rawFlight.baggage || 'A confirmar',
+    baggage: rawFlight.baggage || rawFlight.baggageIncluded || 'A confirmar',
     familyScore: Number(rawFlight.familyScore || 0),
     comfortScore: Number(rawFlight.comfortScore || 0),
     bookingUrl: rawFlight.bookingUrl || rawFlight.url || rawFlight.deepLink || null,
     recommendationReason: rawFlight.recommendationReason || rawFlight.bestFor || 'Curadoria Voya',
     confidence: Number(rawFlight.confidence || 0),
-    cabin: rawFlight.cabin || rawFlight.class || 'economy',
+    cabin: cabinClass,
+    cabinClass,
     priceAmount: parseMoney(priceValue),
   };
 }

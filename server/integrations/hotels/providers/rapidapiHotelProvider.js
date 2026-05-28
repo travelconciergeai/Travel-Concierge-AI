@@ -46,7 +46,7 @@ function buildRapidApiHeaders(env) {
   return {
     'Accept': 'application/json',
     'X-RapidAPI-Key': env.RAPIDAPI_KEY,
-    'X-RapidAPI-Host': env.RAPIDAPI_HOST || DEFAULT_RAPIDAPI_HOST,
+    'X-RapidAPI-Host': env.HOTEL_RAPIDAPI_HOST || env.RAPIDAPI_HOST || DEFAULT_RAPIDAPI_HOST,
   };
 }
 
@@ -238,7 +238,7 @@ export async function searchRapidApiHotels({
   guests = 2,
   env = process.env,
 } = {}) {
-  const host = env.RAPIDAPI_HOST || DEFAULT_RAPIDAPI_HOST;
+  const host = env.HOTEL_RAPIDAPI_HOST || env.RAPIDAPI_HOST || DEFAULT_RAPIDAPI_HOST;
 
   if (!env.RAPIDAPI_KEY || !host) {
     return {
@@ -246,7 +246,7 @@ export async function searchRapidApiHotels({
       provider: 'rapidapi',
       hotels: [],
       errorMessage: 'Hotel provider não configurado',
-      reason: 'RAPIDAPI_KEY/RAPIDAPI_HOST ausentes.',
+      reason: 'RAPIDAPI_KEY/HOTEL_RAPIDAPI_HOST ausentes.',
     };
   }
 

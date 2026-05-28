@@ -161,14 +161,14 @@ export async function searchBookingHotels({
   guests = 2,
   env = process.env,
 } = {}) {
-  const host = env.RAPIDAPI_HOST || DEFAULT_BOOKING_HOST;
+  const host = env.HOTEL_RAPIDAPI_HOST || env.RAPIDAPI_HOST || DEFAULT_BOOKING_HOST;
   if (!env.RAPIDAPI_KEY || host !== DEFAULT_BOOKING_HOST) {
     return {
       status: 'not-configured',
       provider: 'booking',
       hotels: [],
       errorMessage: 'Hotel provider não configurado',
-      reason: 'RAPIDAPI_KEY/RAPIDAPI_HOST ausentes ou host inválido para Booking COM.',
+      reason: 'RAPIDAPI_KEY/HOTEL_RAPIDAPI_HOST ausentes ou host inválido para Booking COM.',
     };
   }
 
