@@ -72,6 +72,7 @@ export function orchestrateTripRecommendation({
   rhythm,
   expertInsights,
   message = '',
+  env = process.env,
 } = {}) {
   const tripProfile = inferProfile({ profile: { ...profile, budget, rhythm }, message });
   const destination = inferDestination({ flights, hotels, tours, message });
@@ -92,6 +93,7 @@ export function orchestrateTripRecommendation({
     budget: tripProfile.budget,
     children: tripProfile.family,
     interests: inferInterests(message),
+    env,
   });
   const leadExpert = usedExpertInsights[0];
 

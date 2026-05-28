@@ -109,7 +109,11 @@ const PlanScreen = ({ kickoff, clearKickoff, setRoute, trip }) => {
       setInsights(visualUpdate.insights);
       toast({ title: 'Roteiro atualizado', tone: 'success', desc: visualUpdate.notes.join(' · ') });
     }
-    setChat(c => [...c, { who: 'voya', text: response.reply || planChatFallbackReply(t) }]);
+    setChat(c => [...c, {
+      who: 'voya',
+      text: response.reply || planChatFallbackReply(t),
+      guidedPaths: response.guidedPaths,
+    }]);
   };
 
   // ---- itinerary actions ----
@@ -263,6 +267,42 @@ const Bubble = ({ m, onCta }) => {
           ))}
         </div>
       )}
+      {m.guidedPaths && (
+        <GuidedPaths paths={m.guidedPaths} onPick={onCta} />
+      )}
+    </div>
+  );
+};
+
+const GuidedPaths = ({ paths, onPick }) => {
+  const options = paths.options || [];
+  if (!options.length) return null;
+
+  return (
+    <div className="mt-3 bg-white border-half rounded-2xl p-2.5 shadow-soft">
+      <div className="px-1.5 pb-2">
+        <div className="text-[12.5px] font-medium text-ink-900">{paths.title || 'Escolha um caminho'}</div>
+        {paths.subtitle && <div className="text-[11.5px] text-ink-500 mt-0.5">{paths.subtitle}</div>}
+      </div>
+      <div className="space-y-1.5">
+        {options.map((option) => {
+          const Ic = Icon[option.icon] || Icon.Sparkles;
+          return (
+            <button key={option.id || option.label}
+              onClick={() => onPick(option.value || option.label)}
+              className="w-full text-left flex items-center gap-3 px-3 py-2.5 rounded-xl hover:bg-ink-50 transition-colors group">
+              <div className="h-7 w-7 rounded-lg bg-ink-100 text-ink-700 flex items-center justify-center shrink-0">
+                <Ic size={13}/>
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="text-[13px] font-medium text-ink-900">{option.label}</div>
+                {option.hint && <div className="text-[11.5px] text-ink-500 mt-0.5">{option.hint}</div>}
+              </div>
+              <Icon.ChevronRight size={13} className="text-ink-400 group-hover:text-ink-900"/>
+            </button>
+          );
+        })}
+      </div>
     </div>
   );
 };

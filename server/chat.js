@@ -2,11 +2,12 @@ import OpenAI from 'openai';
 import { createAgentTools, runMockTools } from './tools.js';
 import { VOYA_AGENT_SYSTEM_PROMPT } from './agentPrompt.js';
 import { isRealDataMode } from './dataMode.js';
+import { userFacingErrorMessages } from './knowledge/errorMessages.js';
 
 const FALLBACK_REPLIES = [
   {
     match: ['barato', 'econom', 'preço', 'preco'],
-    text: 'Usei dados mockados para simular uma revisão de custo. Eu reduziria uma diária premium, manteria o ponto alto do Douro e compararia voos com milhas antes de mexer nas experiências. Qual é o teto de orçamento que você quer respeitar?',
+    text: 'Para uma revisão de custo, eu reduziria uma diária premium, manteria o ponto alto da viagem e compararia voos com milhas antes de mexer nas experiências. Qual é o teto de orçamento que você quer respeitar?',
   },
   {
     match: ['criança', 'filho', 'família', 'familia'],
@@ -14,19 +15,20 @@ const FALLBACK_REPLIES = [
   },
   {
     match: ['milha', 'pontos'],
-    text: 'Pelo cenário mockado, eu começaria comparando milhas no trecho internacional e dinheiro nos trechos curtos. A economia tende a aparecer melhor no GRU-LIS. Você quer priorizar menor custo ou menor tempo de voo?',
+    text: 'Eu começaria comparando milhas no trecho internacional e dinheiro nos trechos curtos. A economia tende a aparecer melhor no voo principal. Você quer priorizar menor custo ou menor tempo de voo?',
   },
   {
     match: ['voo', 'passagem'],
-    text: 'Tenho uma comparação mockada: TAP direto com milhas ou LATAM com conexão. Para uma viagem premium, eu priorizaria menor tempo total e taxa baixa. Suas datas são flexíveis?',
+    text: 'Para uma viagem premium, eu priorizaria menor tempo total, boa chegada e conexão segura. Suas datas são flexíveis?',
   },
   {
     match: ['hotel', 'hoteis', 'hotéis'],
-    text: 'Usei hotéis mockados como referência. Eu manteria uma base muito bem localizada em Lisboa e algo com vista no Porto, para reduzir deslocamento. Você prefere boutique discreto ou luxo mais completo?',
+    text: 'Eu manteria uma base muito bem localizada e evitaria economias que aumentem deslocamento. Você prefere boutique discreto ou luxo mais completo?',
   },
 ];
 
 const instructions = VOYA_AGENT_SYSTEM_PROMPT;
+const REAL_DATA_UNAVAILABLE_MESSAGE = userFacingErrorMessages.realDataUnavailable;
 
 function isHotelSearchIntent(message = '') {
   return /hotel|hot[eé]is|hoteis|hospedagem|pousada|resort|di[aá]ria|booking/i.test(message);
@@ -46,7 +48,173 @@ function detectIntent(message = '') {
   if (/pdf|exportar|compartilh[aá]vel|compartilhavel/i.test(message)) return 'pdf';
   if (/decidir|recomenda|recomenda[cç][aã]o|melhor combina[cç][aã]o|pacote|combinar/i.test(message)) return 'recomendacao';
   if (/roteiro|montar|criar|planejar|plano|itiner[aá]rio|itinerario|alterar|editar|trocar|descanso|leve|ritmo/i.test(text)) return 'roteiro';
+  if (/viajar|viagem|marido|esposa|casal|disney|fam[ií]lia|f[eé]rias/i.test(message)) return 'roteiro';
   return 'geral';
+}
+
+function normalizeText(value = '') {
+  return String(value)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+}
+
+function buildConversationText(messages = [], message = '') {
+  return [
+    ...(messages || []).map((item) => item.content || item.text || ''),
+    message,
+  ].filter(Boolean).join('\n');
+}
+
+function hasDestination(text) {
+  const normalized = normalizeText(text);
+  return /(lisboa|lisbon|paris|orlando|disney|porto|roma|londres|madrid|tokyo|toquio|nova york|miami)/i.test(normalized)
+    || /\b(destino|cidade)\s*:\s*\S+/i.test(text);
+}
+
+function hasDatesOrFlex(text) {
+  const normalized = normalizeText(text);
+  return /(flexivel|flexiveis|sem data|datas abertas|qualquer data|janeiro|fevereiro|marco|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro|\d{1,2}\/\d{1,2}|\d{4}-\d{2}-\d{2}|\b\d+\s*(dias|noites)\b)/i.test(normalized);
+}
+
+function hasTravelers(text) {
+  const normalized = normalizeText(text);
+  return /(familia|crianca|filho|filha|marido|esposa|casal|\b\d+\s*(adultos|pessoas|viajantes|passageiros|criancas)\b)/i.test(normalized);
+}
+
+function hasHotelStyle(text) {
+  const normalized = normalizeText(text);
+  return /(boutique|romantico|luxo|premium|conforto|economico|central|resort|familia|crianca|pratico|perto|localizacao|charme)/i.test(normalized);
+}
+
+function hasOrigin(text) {
+  const normalized = normalizeText(text);
+  return /(gru|sao paulo|rio de janeiro|galeao|brasilia|campinas|\borigem\s*:|\bsaindo de\b|\bpartindo de\b|\bde\s+[a-z]{3,})/i.test(normalized);
+}
+
+function hasDuration(text) {
+  const normalized = normalizeText(text);
+  return /(\b\d+\s*(dias|noites|semanas)\b|fim de semana|uma semana|duas semanas|duracao\s*:)/i.test(normalized);
+}
+
+function hasTripProfile(text) {
+  const normalized = normalizeText(text);
+  return /(casal|marido|esposa|familia|crianca|filho|filha|lua de mel|amigos|solo|disney|cultura|gastronomia|descanso|aventura)/i.test(normalized);
+}
+
+function hasBudgetOrStyle(text) {
+  const normalized = normalizeText(text);
+  return /(orcamento|budget|barato|economico|custo-beneficio|premium|luxo|conforto|boutique|romantico|\br\$\s*\d+)/i.test(normalized);
+}
+
+function getMissingContext(intent, text) {
+  if (intent === 'hotel') {
+    return [
+      !hasDestination(text) && 'destino',
+      !hasDatesOrFlex(text) && 'datas',
+      !hasTravelers(text) && 'viajantes',
+      !hasHotelStyle(text) && 'estilo',
+    ].filter(Boolean);
+  }
+  if (intent === 'voo') {
+    return [
+      !hasOrigin(text) && 'origem',
+      !hasDestination(text) && 'destino',
+      !hasDatesOrFlex(text) && 'datas',
+      !hasTravelers(text) && 'passageiros',
+    ].filter(Boolean);
+  }
+  if (intent === 'roteiro' || intent === 'recomendacao') {
+    return [
+      !hasDestination(text) && 'destino',
+      !hasDuration(text) && 'duração',
+      !hasTripProfile(text) && 'perfil',
+      !hasBudgetOrStyle(text) && 'orçamento',
+    ].filter(Boolean);
+  }
+  return [];
+}
+
+function option(id, label, hint, icon = 'Sparkles', value = label) {
+  return { id, label, hint, icon, value };
+}
+
+function buildGuidedPaths(intent, missing = []) {
+  const first = missing[0];
+  const common = {
+    destino: [
+      option('dest-lisboa', 'Lisboa', 'Cidade, bairros caminháveis e boa gastronomia', 'MapPin', 'Destino: Lisboa'),
+      option('dest-disney', 'Disney / Orlando', 'Logística, parques e ritmo com descanso', 'MapPin', 'Destino: Orlando Disney'),
+      option('dest-paris', 'Paris', 'Hotel bem localizado, cultura e gastronomia', 'MapPin', 'Destino: Paris'),
+    ],
+    datas: [
+      option('dates-flex', 'Datas flexíveis', 'Posso comparar janelas melhores', 'Calendar', 'Datas: flexíveis'),
+      option('dates-month', 'Tenho um mês em mente', 'Diga o mês e eu sigo por aproximação', 'Calendar', 'Datas: mês a definir'),
+      option('dates-fixed', 'Tenho datas exatas', 'Escreva ida e volta no chat', 'Calendar', 'Datas: vou informar datas exatas'),
+    ],
+    viajantes: [
+      option('trav-couple', 'Casal', 'Boa base, atmosfera e experiências memoráveis', 'Users', 'Viajantes: casal'),
+      option('trav-family', 'Família com crianças', 'Menos deslocamento e mais pausas', 'Users', 'Viajantes: família com crianças'),
+      option('trav-adults', 'Adultos', 'Conforto e praticidade no ritmo da viagem', 'Users', 'Viajantes: adultos'),
+    ],
+    passageiros: [
+      option('pax-one', '1 passageiro', 'Busca individual', 'Users', 'Passageiros: 1 adulto'),
+      option('pax-two', '2 passageiros', 'Casal ou dois adultos', 'Users', 'Passageiros: 2 adultos'),
+      option('pax-family', 'Família', 'Adultos e crianças', 'Users', 'Passageiros: família com crianças'),
+    ],
+    estilo: [
+      option('style-boutique', 'Boutique romântico', 'Charme, localização e atmosfera', 'Heart', 'Estilo: hotel boutique romântico'),
+      option('style-family', 'Conforto para família', 'Quartos práticos e baixa fricção', 'Users', 'Estilo: conforto para família'),
+      option('style-value', 'Custo-benefício', 'Boa localização sem excesso de tarifa', 'Coins', 'Estilo: custo-benefício'),
+    ],
+    origem: [
+      option('origin-gru', 'São Paulo / GRU', 'Saída de Guarulhos', 'Plane', 'Origem: GRU São Paulo'),
+      option('origin-rio', 'Rio de Janeiro', 'Saída do Rio', 'Plane', 'Origem: Rio de Janeiro'),
+      option('origin-other', 'Outra origem', 'Escreva a cidade ou aeroporto', 'Plane', 'Origem: vou informar'),
+    ],
+    duração: [
+      option('dur-week', '7 dias', 'Boa duração para uma primeira versão', 'Calendar', 'Duração: 7 dias'),
+      option('dur-ten', '10 dias', 'Mais respiro e menos correria', 'Calendar', 'Duração: 10 dias'),
+      option('dur-flex', 'Duração flexível', 'Ajustamos pelo destino e orçamento', 'Calendar', 'Duração: flexível'),
+    ],
+    perfil: [
+      option('profile-couple', 'Casal', 'Boutique, atmosfera e boas reservas', 'Heart', 'Perfil: casal'),
+      option('profile-family', 'Família', 'Pausas, horários bons e conforto', 'Users', 'Perfil: família'),
+      option('profile-disney', 'Disney com criança', 'Parques, descanso e logística', 'Sparkles', 'Perfil: Disney com criança'),
+    ],
+    orçamento: [
+      option('budget-value', 'Priorizar custo-benefício', 'Economizar sem perder conforto essencial', 'Coins', 'Orçamento/estilo: custo-benefício'),
+      option('budget-comfort', 'Priorizar conforto', 'Menos atrito e melhor localização', 'Sparkles', 'Orçamento/estilo: conforto'),
+      option('budget-premium', 'Premium consciente', 'Boa experiência sem exageros', 'Award', 'Orçamento/estilo: premium consciente'),
+    ],
+  };
+
+  const actionOptions = {
+    hotel: [option('see-hotels', 'Ver hotéis', 'Depois que fecharmos o contexto mínimo', 'Bed', 'Ver hotéis')],
+    voo: [option('see-flights', 'Ver voos', 'Depois que fecharmos o contexto mínimo', 'Plane', 'Ver voos')],
+    roteiro: [option('build-plan', 'Montar roteiro', 'Depois que fecharmos o contexto mínimo', 'Map', 'Montar roteiro')],
+    recomendacao: [option('build-plan', 'Montar roteiro', 'Depois que fecharmos o contexto mínimo', 'Map', 'Montar roteiro')],
+  };
+
+  const options = common[first] || actionOptions[intent] || [
+    option('choose-destination', 'Escolher destino', 'Começar pela cidade ou região', 'MapPin', 'Escolher destino'),
+    option('choose-style', 'Escolher estilo da viagem', 'Conforto, orçamento ou atmosfera', 'Sparkles', 'Escolher estilo da viagem'),
+  ];
+
+  return {
+    kind: intent,
+    missing,
+    title: first ? 'Vamos calibrar antes de buscar' : 'Pronto para consultar',
+    subtitle: first ? 'Escolha uma opção ou escreva com suas palavras.' : 'Já tenho o mínimo para avançar.',
+    options,
+  };
+}
+
+function shouldGuideIntent(intent, conversationText) {
+  const missing = getMissingContext(intent, conversationText);
+  return ['hotel', 'voo', 'roteiro', 'recomendacao'].includes(intent) && missing.length > 0
+    ? { missing, guidedPaths: buildGuidedPaths(intent, missing) }
+    : null;
 }
 
 async function runDeterministicTools({ intent, env, message }) {
@@ -123,27 +291,27 @@ function isFlightToolFailure(tool) {
 
 function realModeToolError(intent, tool) {
   if (intent === 'hotel') {
-    return tool?.errorMessage || 'Não foi possível consultar hotéis reais agora. Não vou usar dados mockados em modo real.';
+    return REAL_DATA_UNAVAILABLE_MESSAGE;
   }
   if (intent === 'voo') {
-    return tool?.errorMessage || 'Não foi possível consultar voos reais agora. Não vou usar dados mockados em modo real.';
+    return REAL_DATA_UNAVAILABLE_MESSAGE;
   }
   if (intent === 'pdf' || intent === 'agenda') {
     return 'Essa ação exige confirmação/integração real. Não vou simular compra, reserva, agenda ou exportação em modo real.';
   }
   if (intent === 'passeio') {
-    return 'Busca real de passeios ainda não está configurada. Em modo real, não vou usar passeios mockados.';
+    return userFacingErrorMessages.providerUnavailable;
   }
   if (intent === 'wallet-milhas') {
-    return 'Wallet e milhas reais ainda não estão conectadas. Em modo real, não vou simular saldo, cartão ou economia.';
+    return 'Ainda não consigo acessar seus saldos e benefícios reais. Prefiro não estimar economia sem esses dados.';
   }
   if (intent === 'roteiro') {
-    return 'Ainda não há roteiro real carregado para editar. Em modo real, não vou aplicar mudanças mockadas no plano.';
+    return userFacingErrorMessages.insufficientInformation;
   }
   if (intent === 'recomendacao') {
-    return 'Recomendação completa de viagem ainda depende de fontes reais de voos, hotéis, passeios, Wallet, milhas e experts. Em modo real, não vou montar uma combinação mockada.';
+    return userFacingErrorMessages.insufficientInformation;
   }
-  return 'Dados reais indisponíveis agora. Não vou usar mock em modo real.';
+  return REAL_DATA_UNAVAILABLE_MESSAGE;
 }
 
 function fallbackReply(message, tools) {
@@ -162,7 +330,7 @@ function fallbackReply(message, tools) {
     const expert = tools.recomendarViagem?.expertInsights?.[0];
 
     return [
-      'Usei dados mockados e montei uma recomendação estratégica da viagem.',
+      'Montei uma recomendação estratégica da viagem.',
       `Melhor combinação geral: ${overall?.rationale || 'combinar voo, hotel e passeio com menor atrito.'}`,
       `Opção mais econômica: ${economical?.rationale || 'priorizar preço sem criar desgaste demais.'}`,
       `Mais confortável: ${comfortable?.rationale || 'priorizar conforto, localização e experiência memorável.'}`,
@@ -182,7 +350,7 @@ function fallbackReply(message, tools) {
     const comfort = ranking.bestComfort;
     const shortest = ranking.shortestDuration;
     const safest = ranking.lowestConnectionRisk;
-    const statusText = flightTool.status === 'mocked' ? 'Os dados ainda são mockados.' : '';
+    const statusText = flightTool.status === 'mocked' ? 'Estes dados são demonstrativos.' : '';
     const bookingUrl = overall?.bookingUrl || miles?.bookingUrl || price?.bookingUrl;
 
     return [
@@ -200,10 +368,10 @@ function fallbackReply(message, tools) {
   if (toolNames.includes('buscarHoteis')) {
     const hotelTool = tools.buscarHoteis || {};
     if (hotelTool.status === 'not-configured') {
-      return 'Hotel provider não configurado. Para buscar hotéis reais, preencha HOTEL_PROVIDER, RAPIDAPI_KEY e HOTEL_RAPIDAPI_HOST para Booking/RapidAPI.';
+      return userFacingErrorMessages.providerUnavailable;
     }
     if (hotelTool.status === 'error') {
-      return 'Não foi possível consultar hotéis reais agora. Não vou inventar hotéis: tente novamente em alguns minutos ou revise a configuração do provider.';
+      return userFacingErrorMessages.hotelSearchFailed;
     }
 
     const ranking = hotelTool.ranking?.recommendations || {};
@@ -212,7 +380,7 @@ function fallbackReply(message, tools) {
     const value = ranking.bestValue;
     const bestPrice = ranking.bestPrice;
     const family = ranking.bestFamily;
-    const statusText = hotelTool.status === 'mocked' ? 'Os dados ainda são mockados.' : '';
+    const statusText = hotelTool.status === 'mocked' ? 'Estes dados são demonstrativos.' : '';
     const expert = expertMatch?.matchedExpertRecommendation;
     const bookingUrl = overall?.bookingUrl || expertMatch?.bookingUrl || value?.bookingUrl;
 
@@ -233,12 +401,12 @@ function fallbackReply(message, tools) {
     const value = ranking?.bestValue?.title || 'o melhor custo-benefício';
     const memorable = ranking?.mostMemorable?.title || 'a experiência mais memorável';
     const light = ranking?.lightest?.title || 'o passeio mais leve';
-    return `Usei passeios mockados e ranqueei como consultoria. Melhor escolha geral: ${overall}. Melhor para família: ${family}. Melhor custo-benefício: ${value}. Mais memorável: ${memorable}. Mais leve: ${light}. Nem sempre o mais barato é o melhor: eu priorizaria baixa fricção, boa duração e memória real da viagem.`;
+    return `Ranqueei os passeios como consultoria. Melhor escolha geral: ${overall}. Melhor para família: ${family}. Melhor custo-benefício: ${value}. Mais memorável: ${memorable}. Mais leve: ${light}. Nem sempre o mais barato é o melhor: eu priorizaria baixa fricção, boa duração e memória real da viagem.`;
   }
   if (found) return found.text;
-  if (toolNames.includes('gerarPDF')) return 'Preparei uma exportação mockada do roteiro. O próximo passo seria escolher o formato: resumo executivo, roteiro completo ou versão para compartilhar?';
-  if (toolNames.includes('consultarWallet')) return 'Consultei a wallet mockada. Voya Signature parece melhor para hotéis; TAP Miles & Go faz mais sentido para voos Star Alliance. Você quer otimizar por milhas ou benefícios?';
-  if (toolNames.includes('criarRoteiro')) return 'Posso montar uma primeira versão mockada do roteiro. Para acertar de primeira, me diga destino, datas aproximadas e ritmo: tranquilo, equilibrado ou intenso.';
+  if (toolNames.includes('gerarPDF')) return 'Preparei uma exportação de demonstração do roteiro. O próximo passo seria escolher o formato: resumo executivo, roteiro completo ou versão para compartilhar?';
+  if (toolNames.includes('consultarWallet')) return 'Consultei uma carteira de demonstração. Para hotéis, eu priorizaria benefícios de estadia; para voos, milhas no trecho principal. Você quer otimizar por milhas ou benefícios?';
+  if (toolNames.includes('criarRoteiro')) return 'Posso montar uma primeira versão do roteiro. Para acertar de primeira, me diga destino, datas aproximadas e ritmo: tranquilo, equilibrado ou intenso.';
 
   return 'Anotado. Para seguir bem, preciso de um detalhe: destino, datas, orçamento ou ritmo da viagem. Qual desses você já tem definido?';
 }
@@ -255,8 +423,10 @@ function buildStructuredContext({ intent, latestMessage, tools }) {
       'Para hotéis, explique melhor escolha geral e melhor custo-benefício usando toolResults.buscarHoteis.ranking.',
       'Inclua bookingUrl quando existir.',
       'Se não houver dados reais de hotéis, diga que não conseguiu consultar hotéis reais agora.',
-      'Se toolResults tiver status mocked, mencione que os dados ainda são mockados.',
+      'Se toolResults tiver status mocked, diga apenas que os dados são demonstrativos.',
       'Para voos, cite opções presentes em toolResults.buscarVoos.options e explique custo-benefício, duração, escalas, família e milhas.',
+      'Para roteiro em modo sem ferramenta, colete contexto antes de prometer um roteiro: destino, datas, viajantes, orçamento e estilo da viagem.',
+      'Para mensagens genéricas, responda naturalmente e de forma curta.',
     ],
   };
 }
@@ -272,11 +442,11 @@ function toOpenAIInput(messages, latestMessage, tools = {}, intent = 'geral') {
     {
       role: 'user',
       content: [
-        'Contexto estruturado da Voya para esta rodada:',
+        'Contexto estruturado para esta rodada:',
         JSON.stringify(buildStructuredContext({ intent, latestMessage, tools })),
         Object.keys(tools).length
-          ? 'A ferramenta já foi executada pelo backend antes desta resposta. Não invente dados fora desse contexto.'
-          : 'Nenhuma ferramenta foi necessária nesta rodada. Responda de forma curta e peça o menor detalhe útil.',
+          ? 'A busca necessária já foi executada antes desta resposta. Não invente dados fora desse contexto.'
+          : 'Nenhuma ferramenta foi necessária nesta rodada. Responda de forma curta. Se for pedido de roteiro, colete destino, datas, viajantes, orçamento e estilo antes de prometer montar algo.',
       ].join('\n\n'),
     },
   ];
@@ -289,9 +459,11 @@ async function callOpenAI({ env, message, messages, tools, intent }) {
     model: env.OPENAI_MODEL || 'gpt-5.5',
     instructions: [
       instructions,
-      'Nesta chamada, as ferramentas já foram executadas de forma determinística pelo backend.',
-      'Use somente o contexto estruturado recebido em toolResults.',
+      'Nesta chamada, as buscas necessárias já foram executadas antes da resposta.',
+      'Quando toolResults estiver vazio, converse normalmente e colete briefing sem inventar dados de viagem.',
+      'Quando toolResults existir, use somente o contexto estruturado recebido em toolResults.',
       'Se detectedIntent for hotel, não crie roteiro e não dê resposta genérica: recomende os hotéis retornados.',
+      'Se detectedIntent for roteiro, faça perguntas curtas para coletar destino, datas, viajantes, orçamento e estilo da viagem antes de prometer um roteiro.',
     ].join('\n\n'),
     input,
     max_output_tokens: 550,
@@ -348,12 +520,14 @@ export function createChatHandler(env = process.env) {
 
       let tools = {};
       let reply = '';
-      let source = 'mock';
       let toolCalls = [];
       const intent = detectIntent(message);
       const realMode = isRealDataMode(env);
+      let source = realMode ? 'openai' : 'mock';
+      const conversationText = buildConversationText(messages, message);
+      const guided = shouldGuideIntent(intent, conversationText);
 
-      if (realMode && ['passeio', 'wallet-milhas', 'agenda', 'pdf', 'roteiro', 'recomendacao'].includes(intent)) {
+      if (realMode && ['passeio', 'wallet-milhas', 'agenda', 'pdf'].includes(intent)) {
         sendJson(res, 200, {
           reply: realModeToolError(intent),
           source: 'real-unavailable',
@@ -365,9 +539,26 @@ export function createChatHandler(env = process.env) {
         return;
       }
 
-      const deterministicResult = await runDeterministicTools({ intent, env, message });
-      tools = deterministicResult.tools;
-      toolCalls = deterministicResult.toolCalls;
+      if (guided) {
+        sendJson(res, 200, {
+          reply: guided.missing[0] === 'destino'
+            ? 'Claro. Antes de buscar, preciso entender o destino para não te trazer opções soltas.'
+            : 'Perfeito. Só preciso fechar mais um detalhe para buscar com precisão.',
+          source: 'guided',
+          intent,
+          dataMode: realMode ? 'real' : 'mock',
+          tools: {},
+          toolCalls: [],
+          guidedPaths: guided.guidedPaths,
+        });
+        return;
+      }
+
+      if (!realMode || ['hotel', 'voo'].includes(intent)) {
+        const deterministicResult = await runDeterministicTools({ intent, env, message: conversationText });
+        tools = deterministicResult.tools;
+        toolCalls = deterministicResult.toolCalls;
+      }
 
       if (intent === 'hotel' && isHotelToolFailure(tools.buscarHoteis)) {
         sendJson(res, 200, {
@@ -413,21 +604,22 @@ export function createChatHandler(env = process.env) {
 
       if (!reply) {
         tools = Object.keys(tools).length || realMode ? tools : await runMockTools(message, env);
-        reply = realMode
-          ? 'Não consegui gerar uma resposta real agora. Em modo real, a Voya não usa fallback mockado.'
-          : fallbackReply(message, tools);
+        if (realMode) {
+          reply = REAL_DATA_UNAVAILABLE_MESSAGE;
+          source = 'real-unavailable';
+        } else {
+          reply = fallbackReply(message, tools);
+        }
       }
 
-      sendJson(res, 200, { reply, source, intent, dataMode: realMode ? 'real' : 'mock', tools, toolCalls });
+      sendJson(res, 200, { reply, source, intent, dataMode: realMode ? 'real' : 'mock', tools, toolCalls, guidedPaths: null });
     } catch (error) {
-      console.error('[Voya /api/chat] OpenAI request failed', error);
+      console.error('[/api/chat] OpenAI request failed', error);
       const debugError = serializeError(error);
       const realMode = isRealDataMode(env);
       const fallbackTools = message && !realMode ? await runMockTools(message, env).catch(() => ({})) : {};
       sendJson(res, 200, {
-        reply: realMode
-          ? `Erro OpenAI: ${debugError.errorMessage}`
-          : `Erro OpenAI: ${debugError.errorMessage}`,
+        reply: realMode ? REAL_DATA_UNAVAILABLE_MESSAGE : `Erro OpenAI: ${debugError.errorMessage}`,
         source: realMode ? 'real-error' : 'mock-error',
         dataMode: realMode ? 'real' : 'mock',
         ...debugError,

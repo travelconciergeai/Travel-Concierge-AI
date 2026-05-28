@@ -68,7 +68,7 @@ export async function searchHotelsWithEngine({
       query,
       options: [],
       ranking: null,
-      expertRecommendations: getExpertRecommendations({ ...tripContext, limit: 5 }),
+      expertRecommendations: getExpertRecommendations({ ...tripContext, limit: 5, env }),
       errorMessage: 'Hotel provider real não configurado',
       dataMode: 'real',
       source: 'hotel-search-engine',
@@ -78,7 +78,7 @@ export async function searchHotelsWithEngine({
   const providerResult = await runProvider(providerName, query, env);
   const provider = providerResult.provider || providerName;
   const tripContext = buildTripContext(query);
-  const expertRecommendations = getExpertRecommendations({ ...tripContext, limit: 5 });
+  const expertRecommendations = getExpertRecommendations({ ...tripContext, limit: 5, env });
 
   if (providerResult.status === 'not-configured' || providerResult.status === 'error') {
     return {

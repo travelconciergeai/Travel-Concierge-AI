@@ -173,6 +173,7 @@ export function createAgentTools(env = process.env) {
       rhythm,
       profile: { family, style: 'curadoria premium com baixa fricção' },
       message,
+      env,
     });
   },
 
