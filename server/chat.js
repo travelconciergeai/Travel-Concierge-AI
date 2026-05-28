@@ -266,6 +266,9 @@ async function callOpenAI({ env, message, messages, tools, intent }) {
 }
 
 async function readJson(req) {
+  if (req.body && typeof req.body === 'object') return req.body;
+  if (typeof req.body === 'string') return JSON.parse(req.body || '{}');
+
   const chunks = [];
   for await (const chunk of req) chunks.push(chunk);
   if (!chunks.length) return {};
