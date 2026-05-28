@@ -1,13 +1,15 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Icon } from "../icons.jsx";
 import { mockData } from "../mockData.jsx";
+import { isMockDataMode, isRealDataMode } from "../lib/dataMode.js";
 import { Placeholder, Button, Card, Drawer, Modal, OptimizeMenu, SectionHeader, SmartImg, Stat, TabRow, Tag, Topbar, useToast } from "../ui.jsx";
 
 // My Trips — list across states: active, planning, idea, completed.
 
 const TripsScreen = ({ setRoute }) => {
   const [filter, setFilter] = useState('todas');
-  const list = mockData.trips.filter(t => filter === 'todas' || mapState(t.state) === filter);
+  const trips = isMockDataMode() ? mockData.trips : [];
+  const list = trips.filter(t => filter === 'todas' || mapState(t.state) === filter);
 
   return (
     <div className="min-h-screen">
@@ -29,6 +31,12 @@ const TripsScreen = ({ setRoute }) => {
       </div>
 
       <div className="px-10 pb-12 grid grid-cols-2 gap-5">
+        {isRealDataMode() && !list.length && (
+          <Card className="col-span-2 p-6">
+            <div className="text-[14px] font-medium text-ink-900">Nenhuma viagem real carregada ainda.</div>
+            <div className="text-[12.5px] text-ink-500 mt-1">As viagens reais aparecerão aqui quando houver dados conectados.</div>
+          </Card>
+        )}
         {list.map(t => (
           <Card key={t.id} hover className="overflow-hidden" onClick={() => setRoute('plan')}>
             <div className="grid grid-cols-[200px_1fr]">

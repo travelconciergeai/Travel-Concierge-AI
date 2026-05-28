@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { Icon } from "../icons.jsx";
 import { mockData } from "../mockData.jsx";
 import { getStoredFlightSearchResults, subscribeFlightSearchResults } from "../lib/flightSearchState.js";
+import { isMockDataMode, isRealDataMode } from "../lib/dataMode.js";
 import { Placeholder, Button, Card, Drawer, Modal, OptimizeMenu, SectionHeader, SmartImg, Stat, TabRow, Tag, Topbar, useToast } from "../ui.jsx";
 
 // Flights — list + miles compare. NO copyrighted airline UIs, original layout.
@@ -11,7 +12,7 @@ const FlightsScreen = ({ setRoute }) => {
   const [picked, setPicked] = useState(null);
   const [searchFlights, setSearchFlights] = useState(() => getStoredFlightSearchResults());
   const toast = useToast();
-  const flights = searchFlights.length ? searchFlights : mockData.flights;
+  const flights = searchFlights.length ? searchFlights : (isMockDataMode() ? mockData.flights : []);
   const ordered = [...flights].sort((a,b) => {
     if (sort === 'price') return (parseInt(a.price.replace(/\D/g,'')) || 999999999) - (parseInt(b.price.replace(/\D/g,'')) || 999999999);
     if (sort === 'time') return a.dep.localeCompare(b.dep);
@@ -58,6 +59,12 @@ const FlightsScreen = ({ setRoute }) => {
       </div>
 
       <div className="px-10 pb-10 space-y-3">
+        {isRealDataMode() && !ordered.length && (
+          <Card className="p-6">
+            <div className="text-[14px] font-medium text-ink-900">Nenhum voo real carregado ainda.</div>
+            <div className="text-[12.5px] text-ink-500 mt-1">Peça uma busca no chat para consultar o provider real.</div>
+          </Card>
+        )}
         {ordered.map(f => (
           <Card key={f.id} className="p-5 flex items-center gap-6 card-h cursor-pointer" hover onClick={()=>setPicked(f)}>
             <Placeholder tone={f.tone} className="h-12 w-12 rounded-lg shrink-0"/>

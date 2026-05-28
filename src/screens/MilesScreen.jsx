@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Icon } from "../icons.jsx";
 import { mockData } from "../mockData.jsx";
+import { isMockDataMode, isRealDataMode } from "../lib/dataMode.js";
 import { Placeholder, Button, Card, Drawer, Modal, OptimizeMenu, SectionHeader, SmartImg, Stat, TabRow, Tag, Topbar, useToast } from "../ui.jsx";
 
 // Miles — programs + transfer planner + opportunities.
@@ -10,8 +11,9 @@ const MilesScreen = ({ setRoute }) => {
   const [amount, setAmount] = useState(20000);
   const [from, setFrom] = useState('voya');
   const [to, setTo] = useState('tudo');
-  const programs = mockData.milesPrograms;
+  const programs = isMockDataMode() ? mockData.milesPrograms : [];
   const total = programs.reduce((s, p) => s + p.points, 0);
+  const realMode = isRealDataMode();
 
   return (
     <div className="min-h-screen">
@@ -27,11 +29,11 @@ const MilesScreen = ({ setRoute }) => {
               <div className="text-[44px] tracking-tight font-medium text-ink-900 leading-none mt-1">
                 {total.toLocaleString('pt-BR')} <span className="text-ink-500 text-[24px]">pts/milhas</span>
               </div>
-              <div className="text-[13px] text-ink-600 mt-2">≈ R$ <span className="font-medium text-ink-900">8.420</span> em emissões otimizadas · próxima expiração em 60 dias</div>
+              <div className="text-[13px] text-ink-600 mt-2">{realMode ? 'Nenhum programa real sincronizado ainda.' : <>≈ R$ <span className="font-medium text-ink-900">8.420</span> em emissões otimizadas · próxima expiração em 60 dias</>}</div>
             </div>
             <div className="grid grid-cols-2 gap-3 w-[420px]">
               <Stat label="Bônus ativos" value="3" hint="até 30 nov" tone="sage"/>
-              <Stat label="Recomendações" value="4" hint="Voya analisou hoje"/>
+              <Stat label="Recomendações" value={realMode ? "0" : "4"} hint={realMode ? "aguardando dados reais" : "Voya analisou hoje"}/>
             </div>
           </div>
         </Card>
@@ -41,6 +43,12 @@ const MilesScreen = ({ setRoute }) => {
           <Card className="p-6">
             <SectionHeader eyebrow="Programas" title="Seus saldos"/>
             <div className="grid grid-cols-2 gap-3">
+              {realMode && !programs.length && (
+                <div className="col-span-2 bg-white border hairline rounded-xl p-4">
+                  <div className="text-[13px] font-medium text-ink-900">Nenhum saldo real conectado.</div>
+                  <div className="text-[11.5px] text-ink-500 mt-1">Conecte programas reais antes de gerar recomendações.</div>
+                </div>
+              )}
               {programs.map(p => (
                 <div key={p.id} className="bg-white border hairline rounded-xl p-4 card-h">
                   <div className="flex items-center gap-3">

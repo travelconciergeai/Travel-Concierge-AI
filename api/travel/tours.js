@@ -9,12 +9,12 @@ export default async function handler(req, res) {
 
   try {
     const body = await readJson(req);
-    const result = await searchTours(body);
+    const result = await searchTours({ ...body, env: process.env });
     sendJson(res, 200, result);
   } catch (error) {
     sendJson(res, 200, {
       status: 'error',
-      provider: 'mock-tours',
+      provider: 'not-configured',
       errorMessage: error.message || 'Não foi possível consultar passeios agora',
       options: [],
     });

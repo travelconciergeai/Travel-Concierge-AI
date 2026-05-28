@@ -1,6 +1,7 @@
 // App shell — routes, sidebar, keyboard shortcuts.
 import React, { useEffect, useState } from 'react';
 import { mockData } from './mockData.jsx';
+import { isRealDataMode } from './lib/dataMode.js';
 import { CmdPalette, Sidebar, ToastProvider } from './ui.jsx';
 import { HomeScreen } from './screens/HomeScreen.jsx';
 import { PlanScreen } from './screens/PlanScreen.jsx';
@@ -22,7 +23,9 @@ const App = () => {
   // Which trip is currently active in the Plan screen. Default is the Portugal
   // trip; switches to Disney when the Home wizard completes.
   const [activeTripId, setActiveTripId] = useState('trip-lisboa-porto');
-  const activeTrip = activeTripId === 'trip-disney' ? mockData.disneyTrip : mockData.trip;
+  const activeTrip = isRealDataMode()
+    ? null
+    : activeTripId === 'trip-disney' ? mockData.disneyTrip : mockData.trip;
 
   useEffect(() => {
     const onKey = (e) => {

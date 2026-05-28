@@ -57,8 +57,8 @@ export async function searchHotelsWithEngine({
   env = process.env,
   ...context
 } = {}) {
-  const providerName = env.HOTEL_PROVIDER || env.HOTEL_API_PROVIDER;
   const realMode = isRealDataMode(env);
+  const providerName = env.HOTEL_PROVIDER || env.HOTEL_API_PROVIDER || (realMode ? undefined : 'mock');
   const query = { destination, checkIn, checkOut, guests, style, ...context };
   if (realMode && (!providerName || providerName === 'mock')) {
     const tripContext = buildTripContext(query);

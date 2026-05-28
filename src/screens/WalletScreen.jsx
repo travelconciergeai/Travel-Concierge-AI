@@ -1,16 +1,41 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Icon } from "../icons.jsx";
 import { mockData } from "../mockData.jsx";
+import { isRealDataMode } from "../lib/dataMode.js";
 import { Placeholder, Button, Card, Drawer, Modal, OptimizeMenu, SectionHeader, SmartImg, Stat, TabRow, Tag, Topbar, useToast } from "../ui.jsx";
 
 // Wallet — cards, miles overview, benefits. Must NOT feel like a bank.
 // Style: editorial premium, generous spacing, sophisticated cards as objects.
 
 const WalletScreen = ({ setRoute }) => {
-  const [activeCard, setActiveCard] = useState(mockData.cards[0].id);
+  const realMode = isRealDataMode();
+  const [activeCard, setActiveCard] = useState(() => realMode ? null : mockData.cards[0].id);
   const [openBenefit, setOpenBenefit] = useState(null);
-  const card = mockData.cards.find(c => c.id === activeCard);
+  const card = realMode ? null : mockData.cards.find(c => c.id === activeCard);
   const toast = useToast();
+
+  if (realMode) {
+    return (
+      <div className="min-h-screen">
+        <Topbar
+          subtitle="Voya Wallet"
+          title="Sua carteira de viagem"
+          right={
+            <>
+              <Button variant="ghost" icon={Icon.Refresh}>Sincronizar</Button>
+              <Button variant="secondary" icon={Icon.Plus}>Adicionar cartão</Button>
+            </>
+          }
+        />
+        <div className="px-10 pb-12">
+          <Card className="p-6">
+            <div className="text-[14px] font-medium text-ink-900">Nenhuma Wallet real conectada ainda.</div>
+            <div className="text-[12.5px] text-ink-500 mt-1">Cartões, benefícios e saldos só aparecerão depois da integração real.</div>
+          </Card>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen">

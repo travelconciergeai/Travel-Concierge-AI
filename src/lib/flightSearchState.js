@@ -1,4 +1,9 @@
-const FLIGHT_SEARCH_STORAGE_KEY = 'voya:lastFlightSearch';
+import { DATA_MODE, isRealDataMode } from './dataMode.js';
+
+const FLIGHT_SEARCH_STORAGE_KEYS = {
+  mock: 'voya_mock_flights',
+  real: 'voya_real_flights',
+};
 const FLIGHT_SEARCH_EVENT = 'voya:flight-search-updated';
 
 const tones = ['coral', 'cool', 'sage', 'gold'];
@@ -53,7 +58,7 @@ export function mapFlightSearchResult(flight, index = 0) {
 
 export function getStoredFlightSearchResults() {
   try {
-    const payload = JSON.parse(window.localStorage.getItem(FLIGHT_SEARCH_STORAGE_KEY) || 'null');
+    const payload = JSON.parse(window.localStorage.getItem(FLIGHT_SEARCH_STORAGE_KEYS[DATA_MODE]) || 'null');
     if (!Array.isArray(payload?.options)) return [];
     return payload.options.map(mapFlightSearchResult);
   } catch {
@@ -61,13 +66,17 @@ export function getStoredFlightSearchResults() {
   }
 }
 
-export function saveFlightSearchResults(options = []) {
+export function saveFlightSearchResults(options = [], { status = 'mocked' } = {}) {
   if (!Array.isArray(options) || !options.length) return;
-  window.localStorage.setItem(FLIGHT_SEARCH_STORAGE_KEY, JSON.stringify({
+  if (isRealDataMode() && status !== 'live') return;
+
+  window.localStorage.setItem(FLIGHT_SEARCH_STORAGE_KEYS[DATA_MODE], JSON.stringify({
     savedAt: Date.now(),
+    dataMode: DATA_MODE,
+    status,
     options,
   }));
-  window.dispatchEvent(new CustomEvent(FLIGHT_SEARCH_EVENT, { detail: { options } }));
+  window.dispatchEvent(new CustomEvent(FLIGHT_SEARCH_EVENT, { detail: { options, status } }));
 }
 
 export function subscribeFlightSearchResults(callback) {

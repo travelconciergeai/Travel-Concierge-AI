@@ -1,7 +1,10 @@
 import { detectPlanIntents } from '../agents/planIntentAgent.js';
+import { isRealDataMode } from '../lib/dataMode.js';
 import { clonePlanState, uniqueInsights } from '../lib/planState.js';
 
 export const applyPlanAgentUpdate = ({ text, days, trip, insights }) => {
+  if (isRealDataMode()) return null;
+
   const intents = detectPlanIntents(text);
   if (!intents.length) return null;
 

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Icon } from "../icons.jsx";
 import { mockData } from "../mockData.jsx";
+import { isRealDataMode } from "../lib/dataMode.js";
 import { Placeholder, Button, Card, Drawer, Modal, OptimizeMenu, SectionHeader, SmartImg, Stat, TabRow, Tag, Topbar, useToast } from "../ui.jsx";
 
 // Home — conversational landing.
@@ -21,6 +22,7 @@ const HomeScreen = ({ setRoute, kickoffPlan, setActiveTripId }) => {
   const [phase, setPhase] = useState('asking');                // asking | generating | done
   const toast = useToast();
   const scrollerRef = useRef(null);
+  const realMode = isRealDataMode();
 
   // Auto-scroll to bottom on new messages
   useEffect(() => {
@@ -124,6 +126,28 @@ const HomeScreen = ({ setRoute, kickoffPlan, setActiveTripId }) => {
   };
 
   // ---- render ----
+  if (realMode) {
+    return (
+      <div className="min-h-screen">
+        <Topbar subtitle="Voya" title="Concierge de viagens"
+          right={<Button variant="secondary" icon={Icon.Sparkles} onClick={() => setRoute('plan')}>Abrir chat</Button>}/>
+        <div className="px-10 pb-12 grid grid-cols-[1.4fr_1fr] gap-6">
+          <Card className="p-6">
+            <div className="label">Modo real</div>
+            <div className="text-[17px] font-medium tracking-tight text-ink-900 mt-1">Nenhuma viagem real carregada ainda.</div>
+            <div className="text-[12.5px] text-ink-500 mt-1">Hotéis e voos aparecerão depois de consultas reais aos providers configurados.</div>
+            <Button className="mt-5" variant="secondary" iconRight={Icon.ArrowRight} onClick={() => setRoute('plan')}>Consultar no chat</Button>
+          </Card>
+          <Card className="p-6">
+            <div className="label">Sua Voya hoje</div>
+            <div className="text-[17px] font-medium tracking-tight text-ink-900 mt-1">Aguardando dados reais</div>
+            <div className="text-[12.5px] text-ink-500 mt-1">Sem cards demonstrativos, saldos simulados ou viagens fictícias.</div>
+          </Card>
+        </div>
+      </div>
+    );
+  }
+
   if (mode === 'chat') {
     return (
       <div className="h-screen flex flex-col bg-canvas">

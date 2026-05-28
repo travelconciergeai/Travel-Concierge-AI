@@ -3,7 +3,21 @@ export async function searchTours({
   date = '2026-10-13',
   travelers = 2,
   interest = 'cultura e gastronomia',
+  env = process.env,
 } = {}) {
+  const realMode = String(env.DATA_MODE || 'mock').toLowerCase() === 'real';
+
+  if (realMode) {
+    return {
+      status: 'not-configured',
+      provider: 'not-configured',
+      query: { destination, date, travelers, interest },
+      options: [],
+      errorMessage: 'Tour provider real não configurado',
+      dataMode: 'real',
+    };
+  }
+
   return {
     status: 'mocked',
     provider: 'mock-tours',

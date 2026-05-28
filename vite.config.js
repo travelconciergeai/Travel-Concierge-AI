@@ -14,6 +14,9 @@ export default defineConfig(({ mode }) => {
   const debugHandler = createDebugHandler(env);
 
   return {
+    define: {
+      'import.meta.env.DATA_MODE': JSON.stringify(env.DATA_MODE || 'mock'),
+    },
     server: {
       host: '127.0.0.1',
       port: 5173,

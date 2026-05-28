@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Icon } from "../icons.jsx";
 import { mockData } from "../mockData.jsx";
+import { isMockDataMode, isRealDataMode } from "../lib/dataMode.js";
 import { Placeholder, Button, Card, Drawer, Modal, OptimizeMenu, SectionHeader, SmartImg, Stat, TabRow, Tag, Topbar, useToast } from "../ui.jsx";
 
 // Explore — marketplace / editorial of routes. Pinterest-meets-Airbnb editorial.
@@ -9,7 +10,9 @@ const ExploreScreen = ({ setRoute, openExpertProfile }) => {
   const cats = ['Todos','Disney','Europa','Família','Premium','Econômico','Gastronomia','Lua de mel','Aventura','Japão','Praia'];
   const [cat, setCat] = useState('Todos');
   const [open, setOpen] = useState(null);
-  const list = mockData.routes.filter(r => cat === 'Todos' || r.category === cat || r.title.toLowerCase().includes(cat.toLowerCase()));
+  const routes = isMockDataMode() ? mockData.routes : [];
+  const experts = isMockDataMode() ? mockData.experts : [];
+  const list = routes.filter(r => cat === 'Todos' || r.category === cat || r.title.toLowerCase().includes(cat.toLowerCase()));
   const toast = useToast();
 
   return (
@@ -55,7 +58,7 @@ const ExploreScreen = ({ setRoute, openExpertProfile }) => {
           <Button variant="ghost" iconRight={Icon.ArrowRight} onClick={() => setRoute('experts')}>Ver todos</Button>
         </div>
         <div className="flex items-start gap-6 overflow-x-auto pb-2 -mx-10 px-10">
-          {mockData.experts.map(e => (
+          {experts.map(e => (
             <button key={e.id}
               onClick={() => { setRoute('experts'); openExpertProfile && openExpertProfile(e.id); }}
               className="flex flex-col items-center gap-3 shrink-0 group w-[110px]">
@@ -79,7 +82,7 @@ const ExploreScreen = ({ setRoute, openExpertProfile }) => {
             </div>
             <div className="text-center w-full">
               <div className="text-[12.5px] font-medium text-ink-900 leading-tight truncate">Ver todos</div>
-              <div className="text-[10.5px] text-ink-500 mt-0.5 truncate">{mockData.experts.length} experts</div>
+              <div className="text-[10.5px] text-ink-500 mt-0.5 truncate">{experts.length} experts</div>
             </div>
           </button>
         </div>
@@ -100,6 +103,12 @@ const ExploreScreen = ({ setRoute, openExpertProfile }) => {
 
       {/* Route grid — uniform cards */}
       <div className="px-10 pb-12 grid grid-cols-3 gap-5">
+        {isRealDataMode() && !list.length && (
+          <Card className="col-span-3 p-6">
+            <div className="text-[14px] font-medium text-ink-900">Nenhum roteiro editorial real carregado ainda.</div>
+            <div className="text-[12.5px] text-ink-500 mt-1">A curadoria real aparecerá quando a base de conteúdo estiver conectada.</div>
+          </Card>
+        )}
         {list.map((r) => (
           <button key={r.id} onClick={() => setOpen(r)}
             className="bg-white border-half rounded-2xl overflow-hidden text-left card-h flex flex-col h-[400px]">

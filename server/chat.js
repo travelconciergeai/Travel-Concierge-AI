@@ -44,6 +44,7 @@ function detectIntent(message = '') {
   if (/wallet|cart[aã]o|cartao|milha|milhas|pontos/i.test(message)) return 'wallet-milhas';
   if (/agenda|calend[aá]rio|calendario/i.test(message)) return 'agenda';
   if (/pdf|exportar|compartilh[aá]vel|compartilhavel/i.test(message)) return 'pdf';
+  if (/decidir|recomenda|recomenda[cç][aã]o|melhor combina[cç][aã]o|pacote|combinar/i.test(message)) return 'recomendacao';
   if (/roteiro|montar|criar|planejar|plano|itiner[aá]rio|itinerario|alterar|editar|trocar|descanso|leve|ritmo/i.test(text)) return 'roteiro';
   return 'geral';
 }
@@ -102,6 +103,12 @@ async function runDeterministicTools({ intent, env, message }) {
       toolCalls: [{ name: toolName, deterministic: true }],
     };
   }
+  if (intent === 'recomendacao') {
+    return {
+      tools: { recomendarViagem: await agentTools.recomendarViagem(args) },
+      toolCalls: [{ name: 'recomendarViagem', deterministic: true }],
+    };
+  }
 
   return { tools: {}, toolCalls: [] };
 }
@@ -123,6 +130,18 @@ function realModeToolError(intent, tool) {
   }
   if (intent === 'pdf' || intent === 'agenda') {
     return 'Essa ação exige confirmação/integração real. Não vou simular compra, reserva, agenda ou exportação em modo real.';
+  }
+  if (intent === 'passeio') {
+    return 'Busca real de passeios ainda não está configurada. Em modo real, não vou usar passeios mockados.';
+  }
+  if (intent === 'wallet-milhas') {
+    return 'Wallet e milhas reais ainda não estão conectadas. Em modo real, não vou simular saldo, cartão ou economia.';
+  }
+  if (intent === 'roteiro') {
+    return 'Ainda não há roteiro real carregado para editar. Em modo real, não vou aplicar mudanças mockadas no plano.';
+  }
+  if (intent === 'recomendacao') {
+    return 'Recomendação completa de viagem ainda depende de fontes reais de voos, hotéis, passeios, Wallet, milhas e experts. Em modo real, não vou montar uma combinação mockada.';
   }
   return 'Dados reais indisponíveis agora. Não vou usar mock em modo real.';
 }
@@ -333,6 +352,19 @@ export function createChatHandler(env = process.env) {
       let toolCalls = [];
       const intent = detectIntent(message);
       const realMode = isRealDataMode(env);
+
+      if (realMode && ['passeio', 'wallet-milhas', 'agenda', 'pdf', 'roteiro', 'recomendacao'].includes(intent)) {
+        sendJson(res, 200, {
+          reply: realModeToolError(intent),
+          source: 'real-unavailable',
+          intent,
+          dataMode: 'real',
+          tools: {},
+          toolCalls: [],
+        });
+        return;
+      }
+
       const deterministicResult = await runDeterministicTools({ intent, env, message });
       tools = deterministicResult.tools;
       toolCalls = deterministicResult.toolCalls;
@@ -381,7 +413,9 @@ export function createChatHandler(env = process.env) {
 
       if (!reply) {
         tools = Object.keys(tools).length || realMode ? tools : await runMockTools(message, env);
-        reply = fallbackReply(message, tools);
+        reply = realMode
+          ? 'Não consegui gerar uma resposta real agora. Em modo real, a Voya não usa fallback mockado.'
+          : fallbackReply(message, tools);
       }
 
       sendJson(res, 200, { reply, source, intent, dataMode: realMode ? 'real' : 'mock', tools, toolCalls });
@@ -394,7 +428,7 @@ export function createChatHandler(env = process.env) {
         reply: realMode
           ? `Erro OpenAI: ${debugError.errorMessage}`
           : `Erro OpenAI: ${debugError.errorMessage}`,
-        source: 'mock-error',
+        source: realMode ? 'real-error' : 'mock-error',
         dataMode: realMode ? 'real' : 'mock',
         ...debugError,
         tools: fallbackTools,

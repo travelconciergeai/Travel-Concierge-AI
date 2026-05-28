@@ -1,4 +1,9 @@
-const HOTEL_SEARCH_STORAGE_KEY = 'voya:lastHotelSearch';
+import { DATA_MODE, isRealDataMode } from './dataMode.js';
+
+const HOTEL_SEARCH_STORAGE_KEYS = {
+  mock: 'voya_mock_hotels',
+  real: 'voya_real_hotels',
+};
 const HOTEL_SEARCH_EVENT = 'voya:hotel-search-updated';
 
 const tones = ['warm', 'coral', 'sage', 'cool'];
@@ -31,7 +36,7 @@ export function mapHotelSearchResult(hotel, index = 0) {
 
 export function getStoredHotelSearchResults() {
   try {
-    const payload = JSON.parse(window.localStorage.getItem(HOTEL_SEARCH_STORAGE_KEY) || 'null');
+    const payload = JSON.parse(window.localStorage.getItem(HOTEL_SEARCH_STORAGE_KEYS[DATA_MODE]) || 'null');
     if (!Array.isArray(payload?.options)) return [];
     return payload.options.map(mapHotelSearchResult);
   } catch {
@@ -39,13 +44,17 @@ export function getStoredHotelSearchResults() {
   }
 }
 
-export function saveHotelSearchResults(options = []) {
+export function saveHotelSearchResults(options = [], { status = 'mocked' } = {}) {
   if (!Array.isArray(options) || !options.length) return;
-  window.localStorage.setItem(HOTEL_SEARCH_STORAGE_KEY, JSON.stringify({
+  if (isRealDataMode() && status !== 'live') return;
+
+  window.localStorage.setItem(HOTEL_SEARCH_STORAGE_KEYS[DATA_MODE], JSON.stringify({
     savedAt: Date.now(),
+    dataMode: DATA_MODE,
+    status,
     options,
   }));
-  window.dispatchEvent(new CustomEvent(HOTEL_SEARCH_EVENT, { detail: { options } }));
+  window.dispatchEvent(new CustomEvent(HOTEL_SEARCH_EVENT, { detail: { options, status } }));
 }
 
 export function subscribeHotelSearchResults(callback) {

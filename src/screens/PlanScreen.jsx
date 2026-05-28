@@ -7,19 +7,31 @@ import { planChatFallbackReply } from "../lib/planChatFallback.js";
 import { clonePlanState } from "../lib/planState.js";
 import { saveHotelSearchResults } from "../lib/hotelSearchState.js";
 import { saveFlightSearchResults } from "../lib/flightSearchState.js";
+import { isMockDataMode, isRealDataMode } from "../lib/dataMode.js";
 import { applyPlanAgentUpdate } from "../services/planVisualUpdateService.js";
 
 // Plan screen — chat at left, live timeline at right.
 // Itinerary is fully editable: add/remove items, change time slot, replace activity.
 
 const slotIcon = { 'manhã': Icon.Sun, 'tarde': Icon.Sunset, 'noite': Icon.Moon };
+const emptyRealTrip = {
+  id: 'real-empty-trip',
+  title: 'Roteiro',
+  dates: 'A definir',
+  travelers: 0,
+  budget: 'A definir',
+  blurb: 'Nenhum roteiro real carregado ainda.',
+  days: [],
+  insights: [],
+};
 
 const PlanScreen = ({ kickoff, clearKickoff, setRoute, trip }) => {
   const toast = useToast();
-  const tripData = trip || mockData.trip;
+  const realMode = isRealDataMode();
+  const tripData = trip || (realMode ? emptyRealTrip : mockData.trip);
   const [planTrip, setPlanTrip] = useState(() => clonePlanState(tripData));
   const [tab, setTab] = useState('roteiro');
-  const [chat, setChat] = useState(() => [...mockData.chatSeed]);
+  const [chat, setChat] = useState(() => realMode ? [] : [...mockData.chatSeed]);
   const [typing, setTyping] = useState(false);
   const [draft, setDraft] = useState('');
   const [days, setDays] = useState(() => clonePlanState(tripData.days));
@@ -37,7 +49,7 @@ const PlanScreen = ({ kickoff, clearKickoff, setRoute, trip }) => {
     setPlanTrip(clonePlanState(tripData));
     setDays(clonePlanState(tripData.days));
     setInsights(clonePlanState(tripData.insights));
-    setChat([...mockData.chatSeed]);
+    setChat(realMode ? [] : [...mockData.chatSeed]);
     setActiveMode(null);
     setEditing(null);
     setAdding(null);
@@ -85,10 +97,10 @@ const PlanScreen = ({ kickoff, clearKickoff, setRoute, trip }) => {
     });
     setTyping(false);
     if (response.tools?.buscarHoteis?.options?.length) {
-      saveHotelSearchResults(response.tools.buscarHoteis.options);
+      saveHotelSearchResults(response.tools.buscarHoteis.options, { status: response.tools.buscarHoteis.status });
     }
     if (response.tools?.buscarVoos?.options?.length) {
-      saveFlightSearchResults(response.tools.buscarVoos.options);
+      saveFlightSearchResults(response.tools.buscarVoos.options, { status: response.tools.buscarVoos.status });
     }
     const visualUpdate = applyPlanAgentUpdate({ text: t, days, trip: planTrip, insights });
     if (visualUpdate) {
@@ -150,7 +162,7 @@ const PlanScreen = ({ kickoff, clearKickoff, setRoute, trip }) => {
 
         {/* Quick actions */}
         <div className="px-7 pb-2 flex items-center gap-2 flex-wrap">
-          {mockData.quickActions.map(qa => {
+          {(isMockDataMode() ? mockData.quickActions : []).map(qa => {
             const Ic = Icon[qa.icon] || Icon.Sparkles;
             return (
               <button key={qa.id}
@@ -477,7 +489,7 @@ const EditItemDrawer = ({ open, onClose, editing, days, onSave, onReplace, onRem
   if (!item) return null;
 
   const slotLabel = item.t || 'item';
-  const alts = (mockData.itemAlternatives[item.tag] || []).filter(a => {
+  const alts = (isMockDataMode() ? mockData.itemAlternatives[item.tag] || [] : []).filter(a => {
     if (!q) return true;
     return (a.title + ' ' + a.place + ' ' + a.vibe).toLowerCase().includes(q.toLowerCase());
   });

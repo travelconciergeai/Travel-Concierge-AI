@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef, useMemo, useCallback, createContext, useContext } from 'react';
 import { Icon } from './icons.jsx';
+import { isRealDataMode } from './lib/dataMode.js';
 
 // ---------- Placeholder "photography" ----------
 // We never draw real imagery; show striped placeholders with a caption.
@@ -206,8 +207,8 @@ const Sidebar = ({ route, setRoute, openCmd }) => {
         <div className="bg-white border hairline rounded-xl p-3 flex items-center gap-3">
           <div className="h-9 w-9 rounded-full bg-gradient-to-br from-coral-500 to-brand-600 text-white flex items-center justify-center text-[12px] font-medium">HA</div>
           <div className="flex-1 min-w-0">
-            <div className="text-[13px] font-medium text-ink-900 truncate">{mockData.user.name}</div>
-            <div className="text-[11px] text-ink-500 truncate">{mockData.user.tier}</div>
+            <div className="text-[13px] font-medium text-ink-900 truncate">{isRealDataMode() ? 'Voya' : mockData.user.name}</div>
+            <div className="text-[11px] text-ink-500 truncate">{isRealDataMode() ? 'modo real' : mockData.user.tier}</div>
           </div>
           <button className="p-1.5 rounded-lg hover:bg-ink-100 text-ink-500">
             <Icon.Settings size={14}/>

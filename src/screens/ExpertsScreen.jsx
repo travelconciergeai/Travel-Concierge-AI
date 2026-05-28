@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Icon } from "../icons.jsx";
 import { mockData } from "../mockData.jsx";
+import { isMockDataMode, isRealDataMode } from "../lib/dataMode.js";
 import { Placeholder, Button, Card, Drawer, Modal, OptimizeMenu, SectionHeader, SmartImg, Stat, TabRow, Tag, Topbar, useToast } from "../ui.jsx";
 
 // Experts — editorial creator-economy feel. Portrait + stats cards + region filters.
@@ -13,6 +14,8 @@ const ExpertsScreen = ({ setRoute, initialOpen, clearInitialOpen }) => {
   const [searchOpen, setSearchOpen] = useState(false);
   const searchRef = useRef(null);
   const toast = useToast();
+  const experts = isMockDataMode() ? mockData.experts : [];
+  const routes = isMockDataMode() ? mockData.routes : [];
 
   useEffect(() => {
     if (!searchOpen) return;
@@ -38,18 +41,18 @@ const ExpertsScreen = ({ setRoute, initialOpen, clearInitialOpen }) => {
 
   useEffect(() => {
     if (initialOpen) {
-      const e = mockData.experts.find(x => x.id === initialOpen);
+      const e = experts.find(x => x.id === initialOpen);
       if (e) setOpen(e);
       clearInitialOpen && clearInitialOpen();
     }
   }, [initialOpen]);
 
-  const list = mockData.experts.filter(e => {
+  const list = experts.filter(e => {
     if (filter === 'todos') return true;
     return (e.regions || []).includes(filter) || e.specs.includes(filter) || e.region.includes(filter);
   });
 
-  const searchResults = search.trim().length === 0 ? [] : mockData.experts.filter(e => {
+  const searchResults = search.trim().length === 0 ? [] : experts.filter(e => {
     const q = search.toLowerCase();
     return (
       e.name.toLowerCase().includes(q) ||
@@ -135,7 +138,7 @@ const ExpertsScreen = ({ setRoute, initialOpen, clearInitialOpen }) => {
           </div>
           <div className="flex items-center justify-center bg-canvas p-8">
             <div className="relative h-[220px] w-[280px]">
-              {mockData.experts.slice(0, 5).map((e, i) => {
+              {experts.slice(0, 5).map((e, i) => {
                 const positions = [
                   { left: 0,   top: 30,  size: 96, z: 3 },
                   { left: 80,  top: 0,   size: 110, z: 5 },
@@ -164,7 +167,7 @@ const ExpertsScreen = ({ setRoute, initialOpen, clearInitialOpen }) => {
             <div className="label">Filtrar por especialidade</div>
             <div className="text-[15px] text-ink-700 mt-1">Encontre quem entende do destino que você quer</div>
           </div>
-          <div className="text-[12px] text-ink-500">{list.length} de {mockData.experts.length} experts</div>
+          <div className="text-[12px] text-ink-500">{list.length} de {experts.length} experts</div>
         </div>
         <div className="flex items-center gap-2 flex-wrap">
           {filters.map(f => (
@@ -184,8 +187,8 @@ const ExpertsScreen = ({ setRoute, initialOpen, clearInitialOpen }) => {
         ))}
         {list.length === 0 && (
           <div className="col-span-2 bg-white border-half rounded-2xl p-10 text-center">
-            <div className="text-[15px] text-ink-700">Nenhum expert para esse filtro ainda.</div>
-            <div className="text-[12.5px] text-ink-500 mt-1">Pode pedir pra Voya assinar uma viagem sob medida — sempre temos quem encaixe.</div>
+            <div className="text-[15px] text-ink-700">{isRealDataMode() ? 'Nenhum expert real carregado ainda.' : 'Nenhum expert para esse filtro ainda.'}</div>
+            <div className="text-[12.5px] text-ink-500 mt-1">{isRealDataMode() ? 'A base real de experts ainda precisa ser conectada.' : 'Pode pedir pra Voya assinar uma viagem sob medida — sempre temos quem encaixe.'}</div>
           </div>
         )}
       </div>
@@ -226,7 +229,7 @@ const ExpertsScreen = ({ setRoute, initialOpen, clearInitialOpen }) => {
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
-                {mockData.routes.filter(r => r.expert === open.name).slice(0,4).map(r => (
+                {routes.filter(r => r.expert === open.name).slice(0,4).map(r => (
                   <div key={r.id} className="bg-white border-half rounded-xl overflow-hidden flex">
                     <SmartImg seed={`route-${r.id}`} tone={r.tone} label={r.category} w={300} h={300} className="w-[110px] shrink-0"/>
                     <div className="p-3 flex-1 flex flex-col min-w-0">
@@ -239,7 +242,7 @@ const ExpertsScreen = ({ setRoute, initialOpen, clearInitialOpen }) => {
                     </div>
                   </div>
                 ))}
-                {mockData.routes.filter(r => r.expert === open.name).length === 0 && (
+                {routes.filter(r => r.expert === open.name).length === 0 && (
                   <div className="col-span-2 text-[12.5px] text-ink-500 bg-ink-50 rounded-xl p-4">Roteiros sob medida com curadoria de {open.name.split(' ')[0]}.</div>
                 )}
               </div>

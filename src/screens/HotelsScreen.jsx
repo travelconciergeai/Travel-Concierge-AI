@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { Icon } from "../icons.jsx";
 import { mockData } from "../mockData.jsx";
 import { getStoredHotelSearchResults, subscribeHotelSearchResults } from "../lib/hotelSearchState.js";
+import { isMockDataMode, isRealDataMode } from "../lib/dataMode.js";
 import { Placeholder, Button, Card, Drawer, Modal, OptimizeMenu, SectionHeader, SmartImg, Stat, TabRow, Tag, Topbar, useToast } from "../ui.jsx";
 
 // Hotels — Voya Collection editorial.
@@ -10,7 +11,7 @@ const HotelsScreen = ({ setRoute }) => {
   const [open, setOpen] = useState(null);
   const [searchHotels, setSearchHotels] = useState(() => getStoredHotelSearchResults());
   const toast = useToast();
-  const hotels = searchHotels.length ? searchHotels : mockData.hotels;
+  const hotels = searchHotels.length ? searchHotels : (isMockDataMode() ? mockData.hotels : []);
 
   useEffect(() => subscribeHotelSearchResults(setSearchHotels), []);
 
@@ -29,6 +30,12 @@ const HotelsScreen = ({ setRoute }) => {
                   <Button variant="secondary" icon={Icon.MapPin}>Mapa</Button></>}/>
 
       <div className="px-10 pb-12 grid grid-cols-3 gap-5">
+        {isRealDataMode() && !hotels.length && (
+          <Card className="col-span-3 p-6">
+            <div className="text-[14px] font-medium text-ink-900">Nenhum hotel real carregado ainda.</div>
+            <div className="text-[12.5px] text-ink-500 mt-1">Peça uma busca no chat para consultar o provider real.</div>
+          </Card>
+        )}
         {hotels.map(h => (
           <Card key={h.id} hover className="overflow-hidden" onClick={() => setOpen(h)}>
             <SmartImg seed={`hotel-${h.id}`} src={h.image} tone={h.tone} label={h.city} w={600} h={400} className="h-[200px]"/>

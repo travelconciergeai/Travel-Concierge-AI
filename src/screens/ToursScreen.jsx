@@ -1,19 +1,27 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Icon } from "../icons.jsx";
 import { mockData } from "../mockData.jsx";
+import { isMockDataMode, isRealDataMode } from "../lib/dataMode.js";
 import { Placeholder, Button, Card, Drawer, Modal, OptimizeMenu, SectionHeader, SmartImg, Stat, TabRow, Tag, Topbar, useToast } from "../ui.jsx";
 
 // Tours / Experiences — curated.
 
 const ToursScreen = ({ setRoute }) => {
   const toast = useToast();
+  const tours = isMockDataMode() ? mockData.tours : [];
   return (
     <div className="min-h-screen">
       <Topbar subtitle="Voya · Passeios" title="Experiências curadas"
         right={<Button variant="secondary" icon={Icon.Sparkles}>Pedir personalizado</Button>}/>
 
       <div className="px-10 pb-12 grid grid-cols-3 gap-5">
-        {mockData.tours.map(t => (
+        {isRealDataMode() && !tours.length && (
+          <Card className="col-span-3 p-6">
+            <div className="text-[14px] font-medium text-ink-900">Nenhum passeio real carregado ainda.</div>
+            <div className="text-[12.5px] text-ink-500 mt-1">O provider real de experiências ainda não está configurado.</div>
+          </Card>
+        )}
+        {tours.map(t => (
           <Card key={t.id} hover className="overflow-hidden">
             <SmartImg seed={`tour-${t.id}`} tone={t.tone} label={t.city} w={600} h={400} className="h-[180px]"/>
             <div className="p-5">

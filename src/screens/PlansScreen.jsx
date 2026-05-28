@@ -1,12 +1,14 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Icon } from "../icons.jsx";
 import { mockData } from "../mockData.jsx";
+import { isMockDataMode, isRealDataMode } from "../lib/dataMode.js";
 import { Placeholder, Button, Card, Drawer, Modal, OptimizeMenu, SectionHeader, SmartImg, Stat, TabRow, Tag, Topbar, useToast } from "../ui.jsx";
 
 // Plans — pricing.
 
 const PlansScreen = ({ setRoute }) => {
   const toast = useToast();
+  const plans = isMockDataMode() ? mockData.plans : [];
   return (
     <div className="min-h-screen">
       <Topbar subtitle="Voya · Planos" title="Como você quer viajar com a Voya"
@@ -21,7 +23,13 @@ const PlansScreen = ({ setRoute }) => {
         </div>
 
         <div className="grid grid-cols-3 gap-5 max-w-[1100px] mx-auto">
-          {mockData.plans.map(p => (
+          {isRealDataMode() && !plans.length && (
+            <Card className="col-span-3 p-6">
+              <div className="text-[14px] font-medium text-ink-900">Planos reais ainda não configurados.</div>
+              <div className="text-[12.5px] text-ink-500 mt-1">Em modo real, a Voya não exibe preços ou pacotes demonstrativos.</div>
+            </Card>
+          )}
+          {plans.map(p => (
             <Card key={p.id} className={`p-7 flex flex-col relative ${p.highlight ? 'ring-2 ring-ink-900 shadow-lift' : ''}`}>
               {p.highlight && (
                 <div className="absolute -top-3 left-1/2 -translate-x-1/2">

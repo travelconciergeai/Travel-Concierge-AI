@@ -20,7 +20,7 @@ function createHandlers(env = process.env) {
   return {
     '/api/travel/flights': (body) => searchFlights({ ...body, env }),
     '/api/travel/hotels': (body) => searchHotels({ ...body, env }),
-    '/api/travel/tours': (body) => searchTours(body),
+    '/api/travel/tours': (body) => searchTours({ ...body, env }),
   };
 }
 

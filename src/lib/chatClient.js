@@ -1,4 +1,10 @@
+import { isRealDataMode } from './dataMode.js';
+
 const clientFallback = (message) => {
+  if (isRealDataMode()) {
+    return 'Não consegui consultar dados reais agora. Em modo real, a Voya não usa respostas mockadas.';
+  }
+
   const text = message.toLowerCase();
   if (text.includes('milha')) return 'Sem chave de IA configurada, usei o modo mockado: vale comparar TAP Miles&Go para o trecho internacional e dinheiro nos trechos curtos.';
   if (text.includes('hotel')) return 'Sem chave de IA configurada, usei o modo mockado: manteria hotéis bem localizados para reduzir deslocamentos e preservar conforto.';
