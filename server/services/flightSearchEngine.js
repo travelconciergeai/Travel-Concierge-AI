@@ -33,6 +33,8 @@ async function runProvider(providerName, query, env, { allowMockFallback = true 
       fallbackReason: result.errorMessage || result.reason || 'Provider real sem dados disponíveis.',
       providerErrorStatus: result.errorStatus || null,
       providerEndpoint: result.endpoint || null,
+      providerErrorDetail: result.errorDetail || null,
+      diagnostics: result.diagnostics || null,
     };
   }
 
@@ -78,7 +80,9 @@ export async function searchFlightsWithEngine({
       providerEndpoints: providerResult.endpoints || [],
       errorMessage: providerResult.errorMessage || 'Não foi possível consultar voos reais agora',
       errorStatus: providerResult.errorStatus || null,
+      errorDetail: providerResult.errorDetail || null,
       providerEndpoint: providerResult.endpoint || null,
+      diagnostics: providerResult.diagnostics || null,
       source: 'flight-search-engine',
     };
   }
@@ -95,6 +99,7 @@ export async function searchFlightsWithEngine({
     fallbackFrom: providerResult.fallbackFrom || null,
     fallbackReason: providerResult.fallbackReason || null,
     providerEndpoints: providerResult.endpoints || [],
+    diagnostics: providerResult.diagnostics || null,
     source: 'flight-search-engine',
   };
 }

@@ -15,6 +15,8 @@ function addParamIfPresent(params, key, value) {
 
 function getRapidApiHeaders(env, host) {
   return {
+    'Accept': 'application/json',
+    'User-Agent': 'VoyaTravelConcierge/1.0',
     'X-RapidAPI-Key': env.RAPIDAPI_KEY,
     'X-RapidAPI-Host': host,
   };
@@ -66,6 +68,8 @@ function findArray(value, depth = 0) {
     'quotes',
     'legs',
     'segments',
+    'airports',
+    'places',
   ];
 
   for (const key of preferredKeys) {
@@ -78,6 +82,20 @@ function findArray(value, depth = 0) {
   }
 
   return [];
+}
+
+function buildErrorDetail(response) {
+  const message = response.payload?.message
+    || response.payload?.error
+    || response.payload?.errors?.[0]?.message
+    || response.payload?.raw
+    || null;
+
+  if (response.status === 403) {
+    return message || 'RapidAPI retornou 403. Verifique se a chave está inscrita no provider Flights Scraper Sky e se o host do plano é flights-sky.p.rapidapi.com.';
+  }
+
+  return message;
 }
 
 function first(value) {
@@ -184,6 +202,66 @@ function getBaggage(item) {
   ]) || 'A confirmar';
 }
 
+function getAirportCode(item) {
+  return getNested(item, [
+    'skyId',
+    'sky_id',
+    'iata',
+    'iataCode',
+    'code',
+    'navigation.relevantFlightParams.skyId',
+    'presentation.skyId',
+  ]);
+}
+
+function getAirportEntityId(item) {
+  return getNested(item, [
+    'entityId',
+    'entity_id',
+    'navigation.relevantFlightParams.entityId',
+    'presentation.entityId',
+    'id',
+  ]);
+}
+
+function pickAirport(payload, fallbackCode) {
+  const fallback = String(fallbackCode || '').toUpperCase();
+  const items = findArray(payload).filter((item) => item && typeof item === 'object');
+  return items.find((item) => String(getAirportCode(item) || '').toUpperCase() === fallback)
+    || items.find((item) => String(getNested(item, ['type', 'entityType', 'navigation.entityType']) || '').toLowerCase().includes('airport'))
+    || items[0]
+    || null;
+}
+
+async function resolveAirport({ query, fallbackCode, env, host }) {
+  const response = await fetchRapidApiJson('/flights/airports', {
+    query,
+    market: env.FLIGHT_MARKET || 'BR',
+    locale: env.FLIGHT_LOCALE || 'pt-BR',
+  }, env, host);
+
+  if (!response.ok) {
+    return {
+      ok: false,
+      status: response.status,
+      endpoint: response.endpoint,
+      errorDetail: buildErrorDetail(response),
+      airport: null,
+    };
+  }
+
+  const airport = pickAirport(response.payload, fallbackCode);
+  return {
+    ok: Boolean(airport),
+    status: response.status,
+    endpoint: response.endpoint,
+    errorDetail: airport ? null : 'A API não retornou aeroporto compatível.',
+    airport,
+    skyId: getAirportCode(airport) || fallbackCode,
+    entityId: getAirportEntityId(airport),
+  };
+}
+
 function mapRapidApiFlight(item, query, index) {
   const origin = getNested(item, [
     'origin',
@@ -242,11 +320,20 @@ function mapRapidApiFlight(item, query, index) {
 
 function buildFlightParams(query) {
   return {
-    fromEntityId: query.origin,
-    toEntityId: query.destination,
+    fromEntityId: query.originEntityId,
+    toEntityId: query.destinationEntityId,
+    fromSkyId: query.originSkyId,
+    toSkyId: query.destinationSkyId,
+    fromId: query.originSkyId,
+    toId: query.destinationSkyId,
+    originSkyId: query.originSkyId,
+    destinationSkyId: query.destinationSkyId,
+    originEntityId: query.originEntityId,
+    destinationEntityId: query.destinationEntityId,
     origin: query.origin,
     destination: query.destination,
     departureDate: query.date,
+    departDate: query.date,
     returnDate: query.returnDate,
     date: query.date,
     adults: query.travelers,
@@ -254,6 +341,25 @@ function buildFlightParams(query) {
     currency: query.currency,
     market: query.market,
     locale: query.locale,
+  };
+}
+
+async function searchFlightsWithFallback({ pathname, query, env, host }) {
+  const primary = await fetchRapidApiJson(pathname, buildFlightParams(query), env, host);
+  if (primary.ok || pathname === '/flights/search-one-way' || primary.status !== 403) {
+    return { response: primary, endpoint: pathname, fallbackFrom: null };
+  }
+
+  const fallback = await fetchRapidApiJson('/flights/search-one-way', {
+    ...buildFlightParams({ ...query, returnDate: '' }),
+    returnDate: '',
+  }, env, host);
+
+  return {
+    response: fallback,
+    endpoint: '/flights/search-one-way',
+    fallbackFrom: pathname,
+    originalResponse: primary,
   };
 }
 
@@ -294,11 +400,52 @@ export async function searchRapidApiFlights({
   const pathname = query.returnDate ? '/flights/search-roundtrip' : '/flights/search-one-way';
 
   try {
-    const searchResponse = await fetchRapidApiJson(pathname, buildFlightParams(query), env, host);
+    const [originAirport, destinationAirport] = await Promise.all([
+      resolveAirport({ query: origin, fallbackCode: origin, env, host }),
+      resolveAirport({ query: destination, fallbackCode: destination, env, host }),
+    ]);
+
+    if (!originAirport.ok || !destinationAirport.ok) {
+      const failed = !originAirport.ok ? originAirport : destinationAirport;
+      return {
+        status: 'error',
+        provider: 'rapidapi',
+        flights: [],
+        errorMessage: failed.status === 403
+          ? 'Flights Scraper Sky retornou 403 ao resolver aeroportos'
+          : 'Não foi possível resolver aeroportos reais agora',
+        errorStatus: failed.status,
+        endpoint: failed.endpoint,
+        errorDetail: failed.errorDetail,
+        diagnostics: {
+          host,
+          requiredHeaders: ['X-RapidAPI-Key', 'X-RapidAPI-Host'],
+          requiredAirportLookup: true,
+          originLookup: {
+            status: originAirport.status,
+            endpoint: originAirport.endpoint,
+          },
+          destinationLookup: {
+            status: destinationAirport.status,
+            endpoint: destinationAirport.endpoint,
+          },
+        },
+      };
+    }
+
+    const resolvedQuery = {
+      ...query,
+      originSkyId: originAirport.skyId,
+      destinationSkyId: destinationAirport.skyId,
+      originEntityId: originAirport.entityId,
+      destinationEntityId: destinationAirport.entityId,
+    };
+    const searchResult = await searchFlightsWithFallback({ pathname, query: resolvedQuery, env, host });
+    const searchResponse = searchResult.response;
     const flights = findArray(searchResponse.payload)
       .filter((item) => item && typeof item === 'object')
       .slice(0, 12)
-      .map((item, index) => mapRapidApiFlight(item, query, index))
+      .map((item, index) => mapRapidApiFlight(item, resolvedQuery, index))
       .filter((flight) => flight.airline || flight.price || flight.departure || flight.arrival);
 
     if (!searchResponse.ok || !flights.length) {
@@ -306,18 +453,47 @@ export async function searchRapidApiFlights({
         status: 'error',
         provider: 'rapidapi',
         flights: [],
-        errorMessage: 'Não foi possível consultar voos reais agora',
+        errorMessage: searchResponse.status === 403
+          ? 'Flights Scraper Sky retornou 403 na busca de voos'
+          : 'Não foi possível consultar voos reais agora',
         errorStatus: searchResponse.status,
         endpoint: searchResponse.endpoint,
+        errorDetail: buildErrorDetail(searchResponse),
+        diagnostics: {
+          host,
+          endpoint: searchResult.endpoint,
+          fallbackFromEndpoint: searchResult.fallbackFrom,
+          originalRoundtripStatus: searchResult.originalResponse?.status || null,
+          originalRoundtripError: searchResult.originalResponse ? buildErrorDetail(searchResult.originalResponse) : null,
+          usedAirportLookup: true,
+          originSkyId: resolvedQuery.originSkyId,
+          originEntityId: resolvedQuery.originEntityId,
+          destinationSkyId: resolvedQuery.destinationSkyId,
+          destinationEntityId: resolvedQuery.destinationEntityId,
+          requiredHeaders: ['X-RapidAPI-Key', 'X-RapidAPI-Host'],
+          likelyCause: searchResponse.status === 403
+            ? 'Chave sem assinatura nesse provider/endpoint ou endpoint indisponível no plano atual.'
+            : null,
+        },
       };
     }
 
     return {
       status: 'live',
       provider: 'rapidapi',
-      query,
+      query: resolvedQuery,
       flights,
-      endpoints: [pathname],
+      endpoints: ['/flights/airports', searchResult.endpoint],
+      diagnostics: {
+        host,
+        fallbackFromEndpoint: searchResult.fallbackFrom,
+        originalRoundtripStatus: searchResult.originalResponse?.status || null,
+        usedAirportLookup: true,
+        originSkyId: resolvedQuery.originSkyId,
+        originEntityId: resolvedQuery.originEntityId,
+        destinationSkyId: resolvedQuery.destinationSkyId,
+        destinationEntityId: resolvedQuery.destinationEntityId,
+      },
     };
   } catch (error) {
     return {
