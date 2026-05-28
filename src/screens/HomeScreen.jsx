@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { Icon } from "../icons.jsx";
 import { mockData } from "../mockData.jsx";
 import { isRealDataMode } from "../lib/dataMode.js";
+import { sendChatMessage } from "../lib/chatClient.js";
 import { Placeholder, Button, Card, Drawer, Modal, OptimizeMenu, SectionHeader, SmartImg, Stat, TabRow, Tag, Topbar, useToast } from "../ui.jsx";
 
 // Home — conversational landing.
@@ -53,6 +54,24 @@ const HomeScreen = ({ setRoute, kickoffPlan, setActiveTripId }) => {
     const t = (text || input).trim();
     if (!t) return;
     setInput('');
+
+    if (realMode) {
+      const nextChat = [...chat, { id: `u-${Date.now()}`, who: 'user', text: t }];
+      setMode('chat');
+      setChat(nextChat);
+      setThinking(true);
+      sendChatMessage({
+        message: t,
+        messages: nextChat.map(m => ({ role: m.who === 'agent' ? 'assistant' : 'user', content: m.text || '' })),
+      }).then((response) => {
+        setChat(c => [...c, { id: `a-${Date.now()}`, who: 'agent', text: response.reply }]);
+      }).catch((error) => {
+        setChat(c => [...c, { id: `a-${Date.now()}`, who: 'agent', text: `Não consegui consultar dados reais agora: ${error.message}` }]);
+      }).finally(() => {
+        setThinking(false);
+      });
+      return;
+    }
 
     // From idle: detect Disney → enter chat; else go straight to plan
     if (mode === 'idle') {
@@ -126,28 +145,6 @@ const HomeScreen = ({ setRoute, kickoffPlan, setActiveTripId }) => {
   };
 
   // ---- render ----
-  if (realMode) {
-    return (
-      <div className="min-h-screen">
-        <Topbar subtitle="Voya" title="Concierge de viagens"
-          right={<Button variant="secondary" icon={Icon.Sparkles} onClick={() => setRoute('plan')}>Abrir chat</Button>}/>
-        <div className="px-10 pb-12 grid grid-cols-[1.4fr_1fr] gap-6">
-          <Card className="p-6">
-            <div className="label">Modo real</div>
-            <div className="text-[17px] font-medium tracking-tight text-ink-900 mt-1">Nenhuma viagem real carregada ainda.</div>
-            <div className="text-[12.5px] text-ink-500 mt-1">Hotéis e voos aparecerão depois de consultas reais aos providers configurados.</div>
-            <Button className="mt-5" variant="secondary" iconRight={Icon.ArrowRight} onClick={() => setRoute('plan')}>Consultar no chat</Button>
-          </Card>
-          <Card className="p-6">
-            <div className="label">Sua Voya hoje</div>
-            <div className="text-[17px] font-medium tracking-tight text-ink-900 mt-1">Aguardando dados reais</div>
-            <div className="text-[12.5px] text-ink-500 mt-1">Sem cards demonstrativos, saldos simulados ou viagens fictícias.</div>
-          </Card>
-        </div>
-      </div>
-    );
-  }
-
   if (mode === 'chat') {
     return (
       <div className="h-screen flex flex-col bg-canvas">
@@ -163,7 +160,7 @@ const HomeScreen = ({ setRoute, kickoffPlan, setActiveTripId }) => {
             </div>
             <div>
               <div className="text-[13px] font-medium text-ink-900 leading-tight">Voya · concierge</div>
-              <div className="text-[10.5px] text-ink-500 leading-tight">montando seu roteiro</div>
+              <div className="text-[10.5px] text-ink-500 leading-tight">{realMode ? 'modo real' : 'montando seu roteiro'}</div>
             </div>
           </div>
           <Button size="sm" variant="ghost" icon={Icon.X} onClick={exitChat}>Sair</Button>
@@ -174,7 +171,7 @@ const HomeScreen = ({ setRoute, kickoffPlan, setActiveTripId }) => {
           <div className="max-w-[780px] mx-auto py-6 space-y-6">
             {chat.map((m, i) => (
               <ChatMsg key={m.id || i} m={m}
-                onAnswer={answerWizard}
+                onAnswer={realMode ? undefined : answerWizard}
                 onGenDone={onGenerationDone}/>
             ))}
             {thinking && (
@@ -233,9 +230,9 @@ const HomeScreen = ({ setRoute, kickoffPlan, setActiveTripId }) => {
         <div className="max-w-[860px] mx-auto text-center">
           <Tag tone="brand" className="mx-auto"><Icon.Sparkles size={12}/> Concierge premium · IA + experts reais</Tag>
           <h2 className="mt-5 text-[52px] leading-[1.04] tracking-[-0.025em] font-medium text-ink-900">
-            Olá, Helena!
+            {realMode ? 'Olá.' : 'Olá, Helena!'}
             <br/>
-            <span className="serif-i">Qual será a sua próxima viagem?</span>
+            <span className="serif-i">{realMode ? 'Como posso ajudar sua viagem?' : 'Qual será a sua próxima viagem?'}</span>
           </h2>
 
           <div className="mt-9 mx-auto max-w-[720px]">
@@ -265,6 +262,21 @@ const HomeScreen = ({ setRoute, kickoffPlan, setActiveTripId }) => {
         </div>
       </section>
 
+      {realMode ? (
+        <section className="px-10 pb-12 grid grid-cols-[1.4fr_1fr] gap-6">
+          <Card className="p-6">
+            <div className="label">Modo real</div>
+            <div className="text-[17px] font-medium tracking-tight text-ink-900 mt-1">Nenhuma viagem real carregada ainda.</div>
+            <div className="text-[12.5px] text-ink-500 mt-1">Hotéis e voos aparecerão depois de consultas reais aos providers configurados.</div>
+          </Card>
+          <Card className="p-6">
+            <div className="label">Sua Voya hoje</div>
+            <div className="text-[17px] font-medium tracking-tight text-ink-900 mt-1">Aguardando dados reais</div>
+            <div className="text-[12.5px] text-ink-500 mt-1">Sem cards demonstrativos, saldos simulados ou viagens fictícias.</div>
+          </Card>
+        </section>
+      ) : (
+        <>
       <StartersBoard onPick={(label) => submit(label)}/>
 
       <section className="px-10 pb-12 grid grid-cols-[1.4fr_1fr] gap-6">
@@ -349,6 +361,8 @@ const HomeScreen = ({ setRoute, kickoffPlan, setActiveTripId }) => {
           ))}
         </div>
       </section>
+        </>
+      )}
     </div>
   );
 };
