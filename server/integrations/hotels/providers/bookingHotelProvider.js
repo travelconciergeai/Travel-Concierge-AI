@@ -19,6 +19,35 @@ function buildHeaders(env, host) {
   };
 }
 
+function classifyProviderIssue({ status, errorType, payload } = {}) {
+  const message = String(
+    payload?.message
+    || payload?.error
+    || payload?.errors?.[0]?.message
+    || '',
+  ).toLowerCase();
+
+  if (errorType) return errorType;
+  if (status === 401 || status === 403) return 'auth-error';
+  if (status === 429 || message.includes('quota') || message.includes('limit')) return 'quota-error';
+  if (status >= 500) return 'provider-unavailable';
+  if (status >= 400) return 'provider-error';
+  return null;
+}
+
+function summarizePayload(payload) {
+  if (!payload || typeof payload !== 'object') return { type: typeof payload };
+  const data = payload.data;
+  return {
+    topLevelKeys: Object.keys(payload).slice(0, 20),
+    status: payload.status,
+    message: payload.message || payload.error || null,
+    dataType: Array.isArray(data) ? 'array' : typeof data,
+    dataCount: Array.isArray(data) ? data.length : null,
+    dataKeys: data && !Array.isArray(data) && typeof data === 'object' ? Object.keys(data).slice(0, 20) : [],
+  };
+}
+
 async function fetchBookingJson(pathname, params, env, host) {
   const timeoutMs = Number(env.RAPIDAPI_TIMEOUT_MS || 15000);
   const url = new URL(`https://${host}${pathname}`);
@@ -28,17 +57,46 @@ async function fetchBookingJson(pathname, params, env, host) {
     }
   });
 
-  const response = await fetch(url, {
-    method: 'GET',
-    headers: buildHeaders(env, host),
-    signal: AbortSignal.timeout(timeoutMs),
-  });
+  const startedAt = Date.now();
+  let response;
+  try {
+    response = await fetch(url, {
+      method: 'GET',
+      headers: buildHeaders(env, host),
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+  } catch (error) {
+    const errorType = ['AbortError', 'TimeoutError'].includes(error.name) ? 'timeout' : 'provider-unavailable';
+    return {
+      ok: false,
+      status: null,
+      payload: null,
+      endpoint: pathname,
+      url: url.toString(),
+      elapsedMs: Date.now() - startedAt,
+      errorType,
+      errorMessage: error.message,
+    };
+  }
 
   let payload = null;
+  let rawPreview = null;
   try {
-    payload = await response.json();
-  } catch {
-    payload = null;
+    const raw = await response.text();
+    rawPreview = raw.slice(0, 700);
+    payload = raw ? JSON.parse(raw) : null;
+  } catch (error) {
+    return {
+      ok: false,
+      status: response.status,
+      payload: null,
+      endpoint: pathname,
+      url: url.toString(),
+      elapsedMs: Date.now() - startedAt,
+      errorType: 'parsing-error',
+      errorMessage: error.message,
+      rawPreview,
+    };
   }
 
   return {
@@ -46,6 +104,11 @@ async function fetchBookingJson(pathname, params, env, host) {
     status: response.status,
     payload,
     endpoint: pathname,
+    url: url.toString(),
+    elapsedMs: Date.now() - startedAt,
+    errorType: classifyProviderIssue({ status: response.status, payload }),
+    errorMessage: buildErrorDetail({ status: response.status, payload }),
+    payloadSummary: summarizePayload(payload),
   };
 }
 
@@ -66,14 +129,26 @@ function buildErrorDetail(response) {
 }
 
 function buildDiagnostics({ host, endpoint, status, phase, response }) {
+  const errorType = classifyProviderIssue({
+    status,
+    errorType: response?.errorType,
+    payload: response?.payload,
+  });
+
   return {
     host,
     endpoint,
     phase,
     status,
+    errorType,
+    elapsedMs: response?.elapsedMs || null,
     requiredHost: DEFAULT_BOOKING_HOST,
     requiredHeaders: ['X-RapidAPI-Key', 'X-RapidAPI-Host'],
-    likelyCause: status === 429
+    likelyCause: errorType === 'timeout'
+      ? 'Timeout ao consultar o provider Booking COM.'
+      : errorType === 'parsing-error'
+        ? 'Provider respondeu algo que não pôde ser interpretado como JSON.'
+        : status === 429
       ? 'Quota/limite do plano RapidAPI atingido.'
       : status === 403
         ? 'Chave sem assinatura no Booking COM, host incorreto ou endpoint fora do plano.'
@@ -81,6 +156,26 @@ function buildDiagnostics({ host, endpoint, status, phase, response }) {
           ? 'Parâmetros, endpoint ou disponibilidade do provider devem ser revisados.'
           : null,
     providerMessage: buildErrorDetail(response || {}),
+    payloadSummary: response?.payloadSummary || null,
+    rawPreview: response?.rawPreview || null,
+  };
+}
+
+function buildProviderStep(phase, response, extra = {}) {
+  return {
+    phase,
+    endpoint: response?.endpoint || null,
+    status: response?.status || null,
+    ok: Boolean(response?.ok),
+    errorType: classifyProviderIssue({
+      status: response?.status,
+      errorType: response?.errorType,
+      payload: response?.payload,
+    }),
+    errorMessage: response?.errorMessage || buildErrorDetail(response || {}) || null,
+    elapsedMs: response?.elapsedMs || null,
+    payloadSummary: response?.payloadSummary || summarizePayload(response?.payload),
+    ...extra,
   };
 }
 
@@ -192,6 +287,16 @@ export async function searchBookingHotels({
   env = process.env,
 } = {}) {
   const host = env.HOTEL_RAPIDAPI_HOST || env.RAPIDAPI_HOST || DEFAULT_BOOKING_HOST;
+  const debugSteps = [];
+  const debug = {
+    provider: 'booking',
+    host,
+    hasRapidApiKey: Boolean(env.RAPIDAPI_KEY),
+    dataMode: env.DATA_MODE || null,
+    timeoutMs: Number(env.RAPIDAPI_TIMEOUT_MS || 15000),
+    steps: debugSteps,
+  };
+
   if (!env.RAPIDAPI_KEY || host !== DEFAULT_BOOKING_HOST) {
     return {
       status: 'not-configured',
@@ -204,6 +309,15 @@ export async function searchBookingHotels({
         requiredHost: DEFAULT_BOOKING_HOST,
         requiredHeaders: ['X-RapidAPI-Key', 'X-RapidAPI-Host'],
         likelyCause: 'RAPIDAPI_KEY ausente ou HOTEL_RAPIDAPI_HOST diferente de booking-com15.p.rapidapi.com.',
+      },
+      debug: {
+        ...debug,
+        errorType: 'auth-error',
+        config: {
+          hasRapidApiKey: Boolean(env.RAPIDAPI_KEY),
+          host,
+          requiredHost: DEFAULT_BOOKING_HOST,
+        },
       },
     };
   }
@@ -221,6 +335,14 @@ export async function searchBookingHotels({
     }, env, host);
 
     const resolvedDestination = getFirstDestination(destinationResponse.payload);
+    debugSteps.push(buildProviderStep('destination', destinationResponse, {
+      resolvedDestination: resolvedDestination ? {
+        dest_id: resolvedDestination.dest_id,
+        search_type: resolvedDestination.search_type,
+        label: resolvedDestination.label || resolvedDestination.name || resolvedDestination.city_name || null,
+      } : null,
+    }));
+
     if (!destinationResponse.ok || !resolvedDestination?.dest_id || !resolvedDestination?.search_type) {
       return {
         status: 'error',
@@ -237,6 +359,10 @@ export async function searchBookingHotels({
           phase: 'destination',
           response: destinationResponse,
         }),
+        debug: {
+          ...debug,
+          errorType: destinationResponse.errorType || 'empty-response',
+        },
       };
     }
 
@@ -254,6 +380,11 @@ export async function searchBookingHotels({
     }, env, host);
 
     const hotels = getHotels(searchResponse.payload).slice(0, 8);
+    debugSteps.push(buildProviderStep('search', searchResponse, {
+      rawHotelCount: getHotels(searchResponse.payload).length,
+      limitedHotelCount: hotels.length,
+    }));
+
     if (!searchResponse.ok || !hotels.length) {
       return {
         status: 'error',
@@ -270,6 +401,10 @@ export async function searchBookingHotels({
           phase: 'search',
           response: searchResponse,
         }),
+        debug: {
+          ...debug,
+          errorType: searchResponse.errorType || 'empty-response',
+        },
       };
     }
 
@@ -301,6 +436,13 @@ export async function searchBookingHotels({
         }, env, host),
       ]);
 
+      debugSteps.push({
+        phase: 'enrichment',
+        hotelId,
+        details: buildProviderStep('details', detailsResponse),
+        rooms: buildProviderStep('rooms', roomsResponse),
+      });
+
       return mapBookingHotel(
         hotel,
         detailsResponse.ok ? getDetails(detailsResponse.payload) : {},
@@ -326,6 +468,15 @@ export async function searchBookingHotels({
         status: 'live',
         phase: 'complete',
         resolvedDestination,
+        providerHotelCount: enrichedHotels.length,
+        normalizedCandidateCount: enrichedHotels.filter((hotel) => hotel.id && hotel.name).length,
+      },
+      debug: {
+        ...debug,
+        rawHotelCount: hotels.length,
+        mappedHotelCount: enrichedHotels.length,
+        returnedHotelCount: enrichedHotels.filter((hotel) => hotel.id && hotel.name).length,
+        sampleHotel: enrichedHotels.find((hotel) => hotel.id && hotel.name) || null,
       },
     };
   } catch (error) {
@@ -339,6 +490,11 @@ export async function searchBookingHotels({
         host,
         requiredHost: DEFAULT_BOOKING_HOST,
         likelyCause: 'Falha inesperada no adapter Booking COM.',
+      },
+      debug: {
+        ...debug,
+        errorType: 'provider-unavailable',
+        errorMessage: error.message,
       },
     };
   }

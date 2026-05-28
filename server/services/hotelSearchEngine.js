@@ -93,6 +93,7 @@ export async function searchHotelsWithEngine({
       endpoint: providerResult.endpoint || null,
       errorDetail: providerResult.errorDetail || providerResult.reason || null,
       diagnostics: providerResult.diagnostics || null,
+      debug: providerResult.debug || null,
       dataMode: realMode ? 'real' : 'mock',
       source: 'hotel-search-engine',
     };
@@ -102,6 +103,12 @@ export async function searchHotelsWithEngine({
     provider,
     destination,
   });
+  const engineDebug = {
+    providerStatus: providerResult.status,
+    providerHotelCount: (providerResult.hotels || providerResult.options || []).length,
+    normalizedCount: normalized.length,
+    providerDebug: providerResult.debug || null,
+  };
 
   if (!normalized.length && provider !== 'mock') {
     return {
@@ -115,6 +122,11 @@ export async function searchHotelsWithEngine({
       endpoint: providerResult.endpoints?.join(' -> ') || null,
       errorDetail: providerResult.errorDetail || null,
       diagnostics: providerResult.diagnostics || null,
+      debug: {
+        ...engineDebug,
+        errorType: 'normalization-error',
+        likelyCause: 'O provider retornou itens, mas nenhum passou pelo normalizador no formato esperado.',
+      },
       dataMode: realMode ? 'real' : 'mock',
       source: 'hotel-search-engine',
     };
@@ -125,18 +137,26 @@ export async function searchHotelsWithEngine({
     style,
     budgetCap: context.budgetCap || (tripContext.budget.includes('econ') ? 1300 : 1800),
   });
+  const rankedOptions = sortOptionsByRanking(matchedOptions, ranking);
 
   return {
     status: providerResult.status || 'mocked',
     provider,
     query,
-    options: sortOptionsByRanking(matchedOptions, ranking),
+    options: rankedOptions,
     ranking,
     expertRecommendations,
     bestPrice: ranking.recommendations.bestPrice,
     bestExpertMatch: ranking.recommendations.bestExpertMatch,
     providerEndpoints: providerResult.endpoints || [],
     diagnostics: providerResult.diagnostics || null,
+    debug: {
+      ...engineDebug,
+      matchedCount: matchedOptions.length,
+      rankedCount: rankedOptions.length,
+      rankingRecommendations: ranking.recommendations,
+      rankingDiscardedEverything: Boolean(matchedOptions.length && !rankedOptions.length),
+    },
     dataMode: realMode ? 'real' : 'mock',
     source: 'hotel-search-engine',
   };
