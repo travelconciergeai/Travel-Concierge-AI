@@ -1,6 +1,7 @@
 import OpenAI from 'openai';
 import { createAgentTools, runMockTools } from './tools.js';
 import { VOYA_AGENT_SYSTEM_PROMPT } from './agentPrompt.js';
+import { isRealDataMode } from './dataMode.js';
 
 const FALLBACK_REPLIES = [
   {
@@ -107,6 +108,23 @@ async function runDeterministicTools({ intent, env, message }) {
 
 function isHotelToolFailure(tool) {
   return !tool || tool.status === 'not-configured' || tool.status === 'error' || !tool.options?.length;
+}
+
+function isFlightToolFailure(tool) {
+  return !tool || tool.status === 'not-configured' || tool.status === 'error' || !tool.options?.length;
+}
+
+function realModeToolError(intent, tool) {
+  if (intent === 'hotel') {
+    return tool?.errorMessage || 'Não foi possível consultar hotéis reais agora. Não vou usar dados mockados em modo real.';
+  }
+  if (intent === 'voo') {
+    return tool?.errorMessage || 'Não foi possível consultar voos reais agora. Não vou usar dados mockados em modo real.';
+  }
+  if (intent === 'pdf' || intent === 'agenda') {
+    return 'Essa ação exige confirmação/integração real. Não vou simular compra, reserva, agenda ou exportação em modo real.';
+  }
+  return 'Dados reais indisponíveis agora. Não vou usar mock em modo real.';
 }
 
 function fallbackReply(message, tools) {
@@ -314,15 +332,41 @@ export function createChatHandler(env = process.env) {
       let source = 'mock';
       let toolCalls = [];
       const intent = detectIntent(message);
+      const realMode = isRealDataMode(env);
       const deterministicResult = await runDeterministicTools({ intent, env, message });
       tools = deterministicResult.tools;
       toolCalls = deterministicResult.toolCalls;
 
       if (intent === 'hotel' && isHotelToolFailure(tools.buscarHoteis)) {
         sendJson(res, 200, {
-          reply: fallbackReply(message, tools),
+          reply: realMode ? realModeToolError(intent, tools.buscarHoteis) : fallbackReply(message, tools),
           source: 'tool-error',
           intent,
+          dataMode: realMode ? 'real' : 'mock',
+          tools,
+          toolCalls,
+        });
+        return;
+      }
+
+      if (realMode && intent === 'voo' && isFlightToolFailure(tools.buscarVoos)) {
+        sendJson(res, 200, {
+          reply: realModeToolError(intent, tools.buscarVoos),
+          source: 'tool-error',
+          intent,
+          dataMode: 'real',
+          tools,
+          toolCalls,
+        });
+        return;
+      }
+
+      if (realMode && ['agenda', 'pdf'].includes(intent)) {
+        sendJson(res, 200, {
+          reply: realModeToolError(intent),
+          source: 'tool-error',
+          intent,
+          dataMode: 'real',
           tools,
           toolCalls,
         });
@@ -336,18 +380,22 @@ export function createChatHandler(env = process.env) {
       }
 
       if (!reply) {
-        tools = Object.keys(tools).length ? tools : await runMockTools(message, env);
+        tools = Object.keys(tools).length || realMode ? tools : await runMockTools(message, env);
         reply = fallbackReply(message, tools);
       }
 
-      sendJson(res, 200, { reply, source, intent, tools, toolCalls });
+      sendJson(res, 200, { reply, source, intent, dataMode: realMode ? 'real' : 'mock', tools, toolCalls });
     } catch (error) {
       console.error('[Voya /api/chat] OpenAI request failed', error);
       const debugError = serializeError(error);
-      const fallbackTools = message ? await runMockTools(message, env).catch(() => ({})) : {};
+      const realMode = isRealDataMode(env);
+      const fallbackTools = message && !realMode ? await runMockTools(message, env).catch(() => ({})) : {};
       sendJson(res, 200, {
-        reply: `Erro OpenAI: ${debugError.errorMessage}`,
+        reply: realMode
+          ? `Erro OpenAI: ${debugError.errorMessage}`
+          : `Erro OpenAI: ${debugError.errorMessage}`,
         source: 'mock-error',
+        dataMode: realMode ? 'real' : 'mock',
         ...debugError,
         tools: fallbackTools,
       });

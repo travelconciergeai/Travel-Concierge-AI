@@ -54,6 +54,36 @@ function getFirstDestination(payload) {
   return items.find((item) => item.search_type === 'city') || items[0] || null;
 }
 
+function buildErrorDetail(response) {
+  const message = response.payload?.message
+    || response.payload?.error
+    || response.payload?.errors?.[0]?.message
+    || null;
+
+  if (response.status === 429) return message || 'RapidAPI retornou 429. Quota do provider Booking COM atingida.';
+  if (response.status === 403) return message || 'RapidAPI retornou 403. Verifique assinatura, host e endpoint do provider Booking COM.';
+  return message;
+}
+
+function buildDiagnostics({ host, endpoint, status, phase, response }) {
+  return {
+    host,
+    endpoint,
+    phase,
+    status,
+    requiredHost: DEFAULT_BOOKING_HOST,
+    requiredHeaders: ['X-RapidAPI-Key', 'X-RapidAPI-Host'],
+    likelyCause: status === 429
+      ? 'Quota/limite do plano RapidAPI atingido.'
+      : status === 403
+        ? 'Chave sem assinatura no Booking COM, host incorreto ou endpoint fora do plano.'
+        : status >= 400
+          ? 'Parâmetros, endpoint ou disponibilidade do provider devem ser revisados.'
+          : null,
+    providerMessage: buildErrorDetail(response || {}),
+  };
+}
+
 function getHotels(payload) {
   if (Array.isArray(payload?.data?.hotels)) return payload.data.hotels;
   if (Array.isArray(payload?.data)) return payload.data;
@@ -169,6 +199,12 @@ export async function searchBookingHotels({
       hotels: [],
       errorMessage: 'Hotel provider não configurado',
       reason: 'RAPIDAPI_KEY/HOTEL_RAPIDAPI_HOST ausentes ou host inválido para Booking COM.',
+      diagnostics: {
+        host,
+        requiredHost: DEFAULT_BOOKING_HOST,
+        requiredHeaders: ['X-RapidAPI-Key', 'X-RapidAPI-Host'],
+        likelyCause: 'RAPIDAPI_KEY ausente ou HOTEL_RAPIDAPI_HOST diferente de booking-com15.p.rapidapi.com.',
+      },
     };
   }
 
@@ -193,6 +229,14 @@ export async function searchBookingHotels({
         errorMessage: 'Não foi possível consultar hotéis reais agora',
         errorStatus: destinationResponse.status,
         endpoint: destinationResponse.endpoint,
+        errorDetail: buildErrorDetail(destinationResponse),
+        diagnostics: buildDiagnostics({
+          host,
+          endpoint: destinationResponse.endpoint,
+          status: destinationResponse.status,
+          phase: 'destination',
+          response: destinationResponse,
+        }),
       };
     }
 
@@ -218,6 +262,14 @@ export async function searchBookingHotels({
         errorMessage: 'Não foi possível consultar hotéis reais agora',
         errorStatus: searchResponse.status,
         endpoint: searchResponse.endpoint,
+        errorDetail: buildErrorDetail(searchResponse),
+        diagnostics: buildDiagnostics({
+          host,
+          endpoint: searchResponse.endpoint,
+          status: searchResponse.status,
+          phase: 'search',
+          response: searchResponse,
+        }),
       };
     }
 
@@ -268,6 +320,13 @@ export async function searchBookingHotels({
         '/api/v1/hotels/getHotelDetails',
         '/api/v1/hotels/getRooms',
       ],
+      diagnostics: {
+        host,
+        endpoint: '/api/v1/hotels/searchHotels',
+        status: 'live',
+        phase: 'complete',
+        resolvedDestination,
+      },
     };
   } catch (error) {
     return {
@@ -276,6 +335,11 @@ export async function searchBookingHotels({
       hotels: [],
       errorMessage: 'Não foi possível consultar hotéis reais agora',
       errorDetail: error.message,
+      diagnostics: {
+        host,
+        requiredHost: DEFAULT_BOOKING_HOST,
+        likelyCause: 'Falha inesperada no adapter Booking COM.',
+      },
     };
   }
 }

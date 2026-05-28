@@ -1,6 +1,7 @@
 import { searchFlights } from './integrations/flights.js';
 import { searchHotels } from './integrations/hotels.js';
 import { searchTours } from './integrations/tours.js';
+import { isRealDataMode } from './dataMode.js';
 
 async function readJson(req) {
   const chunks = [];
@@ -55,9 +56,10 @@ export function createTravelHandler(env = process.env) {
       sendJson(res, 200, await handler(body));
     } catch (error) {
       sendJson(res, 200, {
-        status: 'mock-error',
-        provider: 'mock-travel',
+        status: 'error',
+        provider: isRealDataMode(env) ? 'real-mode' : 'mock-travel',
         errorMessage: error.message,
+        dataMode: isRealDataMode(env) ? 'real' : 'mock',
         options: [],
       });
     }

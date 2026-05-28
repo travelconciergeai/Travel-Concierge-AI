@@ -1,4 +1,5 @@
 import { searchHotels } from '../../server/integrations/hotels.js';
+import { isRealDataMode } from '../../server/dataMode.js';
 import { readJson, sendJson } from '../_utils.js';
 
 export default async function handler(req, res) {
@@ -16,6 +17,7 @@ export default async function handler(req, res) {
       status: 'error',
       provider: process.env.HOTEL_PROVIDER || 'unknown',
       errorMessage: error.message || 'Não foi possível consultar hotéis agora',
+      dataMode: isRealDataMode(process.env) ? 'real' : 'mock',
       options: [],
     });
   }

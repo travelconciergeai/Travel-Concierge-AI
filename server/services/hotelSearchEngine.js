@@ -3,6 +3,7 @@ import { searchAmadeusHotels } from '../integrations/hotels/providers/amadeusHot
 import { searchExpediaHotels } from '../integrations/hotels/providers/expediaHotelProvider.js';
 import { searchBookingHotels } from '../integrations/hotels/providers/bookingHotelProvider.js';
 import { searchRapidApiHotels } from '../integrations/hotels/providers/rapidapiHotelProvider.js';
+import { isRealDataMode } from '../dataMode.js';
 import { getExpertRecommendations } from './expertKnowledgeService.js';
 import { matchHotelsWithExperts } from './hotelExpertMatchService.js';
 import { normalizeHotels } from './hotelNormalizer.js';
@@ -57,7 +58,23 @@ export async function searchHotelsWithEngine({
   ...context
 } = {}) {
   const providerName = env.HOTEL_PROVIDER || env.HOTEL_API_PROVIDER;
+  const realMode = isRealDataMode(env);
   const query = { destination, checkIn, checkOut, guests, style, ...context };
+  if (realMode && (!providerName || providerName === 'mock')) {
+    const tripContext = buildTripContext(query);
+    return {
+      status: 'not-configured',
+      provider: providerName || 'not-configured',
+      query,
+      options: [],
+      ranking: null,
+      expertRecommendations: getExpertRecommendations({ ...tripContext, limit: 5 }),
+      errorMessage: 'Hotel provider real não configurado',
+      dataMode: 'real',
+      source: 'hotel-search-engine',
+    };
+  }
+
   const providerResult = await runProvider(providerName, query, env);
   const provider = providerResult.provider || providerName;
   const tripContext = buildTripContext(query);
@@ -74,6 +91,9 @@ export async function searchHotelsWithEngine({
       errorMessage: providerResult.errorMessage || 'Não foi possível consultar hotéis reais agora',
       errorStatus: providerResult.errorStatus || null,
       endpoint: providerResult.endpoint || null,
+      errorDetail: providerResult.errorDetail || providerResult.reason || null,
+      diagnostics: providerResult.diagnostics || null,
+      dataMode: realMode ? 'real' : 'mock',
       source: 'hotel-search-engine',
     };
   }
@@ -93,6 +113,9 @@ export async function searchHotelsWithEngine({
       expertRecommendations,
       errorMessage: 'Não foi possível consultar hotéis reais agora',
       endpoint: providerResult.endpoints?.join(' -> ') || null,
+      errorDetail: providerResult.errorDetail || null,
+      diagnostics: providerResult.diagnostics || null,
+      dataMode: realMode ? 'real' : 'mock',
       source: 'hotel-search-engine',
     };
   }
@@ -113,6 +136,8 @@ export async function searchHotelsWithEngine({
     bestPrice: ranking.recommendations.bestPrice,
     bestExpertMatch: ranking.recommendations.bestExpertMatch,
     providerEndpoints: providerResult.endpoints || [],
+    diagnostics: providerResult.diagnostics || null,
+    dataMode: realMode ? 'real' : 'mock',
     source: 'hotel-search-engine',
   };
 }

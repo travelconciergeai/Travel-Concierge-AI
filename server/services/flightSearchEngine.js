@@ -3,6 +3,7 @@ import { searchAmadeusFlights } from '../integrations/flights/providers/amadeusF
 import { searchDuffelFlights } from '../integrations/flights/providers/duffelFlightProvider.js';
 import { searchLatamFlights } from '../integrations/flights/providers/latamFlightProvider.js';
 import { searchRapidApiFlights } from '../integrations/flights/providers/rapidapiFlightProvider.js';
+import { isRealDataMode } from '../dataMode.js';
 import { normalizeFlights } from './flightNormalizer.js';
 import { rankFlightOptions } from './flightRecommendationService.js';
 
@@ -53,8 +54,27 @@ export async function searchFlightsWithEngine({
   ...context
 } = {}) {
   const providerName = env.FLIGHT_PROVIDER || 'mock';
+  const realMode = isRealDataMode(env);
+  const effectiveAllowMockFallback = realMode ? false : allowMockFallback;
+
+  if (realMode && providerName === 'mock') {
+    return {
+      status: 'not-configured',
+      provider: 'mock',
+      query: { origin, destination, date, returnDate, travelers, cabin, ...context },
+      options: [],
+      ranking: rankFlightOptions([], { family: Boolean(context.children || context.family) }),
+      bestPrice: null,
+      bestMiles: null,
+      bestFamily: null,
+      errorMessage: 'Flight provider real não configurado',
+      dataMode: 'real',
+      source: 'flight-search-engine',
+    };
+  }
+
   const query = { origin, destination, date, returnDate, travelers, cabin, ...context };
-  const providerResult = await runProvider(providerName, query, env, { allowMockFallback });
+  const providerResult = await runProvider(providerName, query, env, { allowMockFallback: effectiveAllowMockFallback });
   const provider = providerResult.provider || providerName;
   const normalized = normalizeFlights(providerResult.flights || providerResult.options || [], {
     provider,
@@ -83,6 +103,7 @@ export async function searchFlightsWithEngine({
       errorDetail: providerResult.errorDetail || null,
       providerEndpoint: providerResult.endpoint || null,
       diagnostics: providerResult.diagnostics || null,
+      dataMode: realMode ? 'real' : 'mock',
       source: 'flight-search-engine',
     };
   }
@@ -100,6 +121,7 @@ export async function searchFlightsWithEngine({
     fallbackReason: providerResult.fallbackReason || null,
     providerEndpoints: providerResult.endpoints || [],
     diagnostics: providerResult.diagnostics || null,
+    dataMode: realMode ? 'real' : 'mock',
     source: 'flight-search-engine',
   };
 }

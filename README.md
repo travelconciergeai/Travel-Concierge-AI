@@ -53,6 +53,7 @@ Configure:
 ```text
 OPENAI_API_KEY=
 OPENAI_MODEL=gpt-5.5
+DATA_MODE=mock
 ```
 
 Depois rode:
@@ -60,6 +61,27 @@ Depois rode:
 ```bash
 npm run dev
 ```
+
+## Modos de dados
+
+A Voya suporta dois modos:
+
+```text
+DATA_MODE=mock
+```
+
+Use para POC/demo. Permite dados mockados quando não houver provider real ou quando uma API externa falhar.
+
+```text
+DATA_MODE=real
+```
+
+Use para operação real. Nesse modo:
+
+- hotéis nunca caem em mock
+- voos nunca caem em mock
+- ações de compra, reserva, agenda e exportação não são simuladas
+- se o provider real falhar ou não estiver configurado, a API retorna erro claro com `options: []`
 
 ## API de hotéis
 
@@ -139,7 +161,7 @@ O buscador de voos organiza:
 - ranking consultivo em `server/services/flightRecommendationService.js`
 - recomendação com preço, milhas, Wallet, conforto, família e risco de conexão
 
-Sem provider real, a Voya retorna voos simulados no formato normalizado.
+Em `DATA_MODE=mock`, sem provider real, a Voya retorna voos simulados no formato normalizado.
 
 Para usar Flights Scraper Sky via RapidAPI:
 
@@ -149,7 +171,7 @@ RAPIDAPI_KEY=
 FLIGHT_RAPIDAPI_HOST=flights-sky.p.rapidapi.com
 ```
 
-Se a API real falhar ou não retornar opções, a Voya mantém o fallback mockado atual para voos e sinaliza `fallbackFrom`/`fallbackReason` no payload.
+Se a API real falhar ou não retornar opções em `DATA_MODE=mock`, a Voya mantém o fallback mockado atual para voos e sinaliza `fallbackFrom`/`fallbackReason` no payload. Em `DATA_MODE=real`, retorna erro claro e `options: []`.
 
 O adapter RapidAPI usa:
 
