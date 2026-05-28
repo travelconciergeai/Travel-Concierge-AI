@@ -19,11 +19,11 @@ function sortOptionsByRanking(options, ranking) {
   return [...options].sort((a, b) => (scoreById.get(b.id) || 0) - (scoreById.get(a.id) || 0));
 }
 
-async function runProvider(providerName, query, env) {
+async function runProvider(providerName, query, env, { allowMockFallback = true } = {}) {
   const adapter = providerAdapters[providerName] || providerAdapters.mock;
   const result = await adapter({ ...query, env });
 
-  if (!result.flights?.length && providerName !== 'mock') {
+  if (!result.flights?.length && providerName !== 'mock' && allowMockFallback) {
     const fallback = await searchMockFlights(query);
     return {
       ...fallback,
@@ -43,14 +43,16 @@ export async function searchFlightsWithEngine({
   origin = 'GRU',
   destination = 'LIS',
   date = '2026-10-12',
+  returnDate = '',
   travelers = 2,
   cabin = 'executiva',
+  allowMockFallback = true,
   env = process.env,
   ...context
 } = {}) {
   const providerName = env.FLIGHT_PROVIDER || 'mock';
-  const query = { origin, destination, date, travelers, cabin, ...context };
-  const providerResult = await runProvider(providerName, query, env);
+  const query = { origin, destination, date, returnDate, travelers, cabin, ...context };
+  const providerResult = await runProvider(providerName, query, env, { allowMockFallback });
   const provider = providerResult.provider || providerName;
   const normalized = normalizeFlights(providerResult.flights || providerResult.options || [], {
     provider,
@@ -60,6 +62,26 @@ export async function searchFlightsWithEngine({
   const ranking = rankFlightOptions(normalized, {
     family: Boolean(context.children || context.family),
   });
+
+  if (!normalized.length) {
+    return {
+      status: providerResult.status || 'error',
+      provider,
+      query,
+      options: [],
+      ranking,
+      bestPrice: null,
+      bestMiles: null,
+      bestFamily: null,
+      fallbackFrom: providerResult.fallbackFrom || null,
+      fallbackReason: providerResult.fallbackReason || null,
+      providerEndpoints: providerResult.endpoints || [],
+      errorMessage: providerResult.errorMessage || 'Não foi possível consultar voos reais agora',
+      errorStatus: providerResult.errorStatus || null,
+      providerEndpoint: providerResult.endpoint || null,
+      source: 'flight-search-engine',
+    };
+  }
 
   return {
     status: providerResult.status || 'mocked',
