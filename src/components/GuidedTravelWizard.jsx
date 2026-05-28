@@ -138,6 +138,7 @@ export const GuidedTravelWizard = ({ paths, onComplete }) => {
   const [context, setContext] = useState({ need: initialNeed });
   const [custom, setCustom] = useState('');
   const [loading, setLoading] = useState(false);
+  const [result, setResult] = useState(null);
   const steps = useMemo(() => getSteps(context.need || initialNeed), [context.need, initialNeed]);
   const step = steps[stepIdx];
   const progress = Math.round(((stepIdx + 1) / steps.length) * 100);
@@ -156,9 +157,45 @@ export const GuidedTravelWizard = ({ paths, onComplete }) => {
   };
 
   const confirm = async () => {
+    if (loading) return;
     setLoading(true);
-    await onComplete(buildFinalMessage(context));
+    try {
+      const response = await onComplete(buildFinalMessage(context));
+      setResult({
+        error: Boolean(response?.error),
+        text: response?.text || 'Não consegui acessar dados reais agora. Prefiro não te mostrar informações imprecisas. Tenta novamente daqui a pouquinho.',
+      });
+    } catch {
+      setResult({
+        error: true,
+        text: 'Não consegui acessar dados reais agora. Prefiro não te mostrar informações imprecisas. Tenta novamente daqui a pouquinho.',
+      });
+    } finally {
+      setLoading(false);
+    }
   };
+
+  if (result) {
+    return (
+      <div className="mt-4 bg-white border-half rounded-2xl p-4 shadow-soft fade-up">
+        <div className="flex items-start gap-3">
+          <div className={`h-8 w-8 rounded-lg flex items-center justify-center shrink-0 ${
+            result.error ? 'bg-coral-50 text-coral-700' : 'bg-sage-50 text-sage-700'
+          }`}>
+            {result.error ? <Icon.Info size={14}/> : <Icon.Check size={14}/>}
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-[12.5px] font-medium text-ink-900">
+              {result.error ? 'Não consegui concluir agora' : 'Recomendação preparada'}
+            </div>
+            <div className="text-[13px] text-ink-800 leading-relaxed mt-1">
+              {result.text}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   if (loading) {
     return (

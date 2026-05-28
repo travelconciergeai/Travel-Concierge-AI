@@ -3,6 +3,8 @@ import { Icon } from "../icons.jsx";
 import { mockData } from "../mockData.jsx";
 import { isRealDataMode } from "../lib/dataMode.js";
 import { sendChatMessage } from "../lib/chatClient.js";
+import { saveHotelSearchResults } from "../lib/hotelSearchState.js";
+import { saveFlightSearchResults } from "../lib/flightSearchState.js";
 import { Placeholder, Button, Card, Drawer, Modal, OptimizeMenu, SectionHeader, SmartImg, Stat, TabRow, Tag, Topbar, useToast } from "../ui.jsx";
 import { GuidedTravelWizard } from "../components/GuidedTravelWizard.jsx";
 
@@ -13,6 +15,8 @@ import { GuidedTravelWizard } from "../components/GuidedTravelWizard.jsx";
 //             top-to-bottom, chatbar pinned to the BOTTOM and always visible.
 //             The Disney wizard renders inline inside agent messages (list of
 //             single-click options + "outra opção" free-text field).
+
+const FINAL_ERROR_SOURCES = ['tool-error', 'real-error', 'real-unavailable', 'client-fallback'];
 
 const HomeScreen = ({ setRoute, kickoffPlan, setActiveTripId }) => {
   const [input, setInput] = useState('');
@@ -96,6 +100,25 @@ const HomeScreen = ({ setRoute, kickoffPlan, setActiveTripId }) => {
     }
   };
 
+  const completeGuidedFlow = async (txt) => {
+    const t = txt.trim();
+    const nextChat = [...chat, { id: `u-${Date.now()}`, who: 'user', text: t }];
+    const response = await sendChatMessage({
+      message: t,
+      messages: nextChat.map(m => ({ role: m.who === 'agent' ? 'assistant' : 'user', content: m.text || '' })),
+    });
+    if (response.tools?.buscarHoteis?.options?.length) {
+      saveHotelSearchResults(response.tools.buscarHoteis.options, { status: response.tools.buscarHoteis.status });
+    }
+    if (response.tools?.buscarVoos?.options?.length) {
+      saveFlightSearchResults(response.tools.buscarVoos.options, { status: response.tools.buscarVoos.status });
+    }
+    return {
+      text: response.reply || 'Não consegui acessar dados reais agora. Prefiro não te mostrar informações imprecisas. Tenta novamente daqui a pouquinho.',
+      error: FINAL_ERROR_SOURCES.includes(response.source),
+    };
+  };
+
   const answerWizard = (optId, label) => {
     const step = mockData.disneyWizard[wizardStep];
     setAnswers(a => ({ ...a, [step.id]: { optId, label } }));
@@ -172,7 +195,7 @@ const HomeScreen = ({ setRoute, kickoffPlan, setActiveTripId }) => {
             {chat.map((m, i) => (
               <ChatMsg key={m.id || i} m={m}
                 onAnswer={realMode ? undefined : answerWizard}
-                onGuided={(value) => submit(value)}
+                onGuided={completeGuidedFlow}
                 onGenDone={onGenerationDone}/>
             ))}
             {thinking && (

@@ -25,6 +25,7 @@ const emptyRealTrip = {
   days: [],
   insights: [],
 };
+const FINAL_ERROR_SOURCES = ['tool-error', 'real-error', 'real-unavailable', 'client-fallback'];
 
 const PlanScreen = ({ kickoff, clearKickoff, setRoute, trip }) => {
   const toast = useToast();
@@ -82,6 +83,42 @@ const PlanScreen = ({ kickoff, clearKickoff, setRoute, trip }) => {
     return () => clearTimeout(t);
   }, [kickoff]);
 
+  const applyResponseEffects = (text, response) => {
+    if (response.tools?.buscarHoteis?.options?.length) {
+      saveHotelSearchResults(response.tools.buscarHoteis.options, { status: response.tools.buscarHoteis.status });
+    }
+    if (response.tools?.buscarVoos?.options?.length) {
+      saveFlightSearchResults(response.tools.buscarVoos.options, { status: response.tools.buscarVoos.status });
+    }
+    const visualUpdate = applyPlanAgentUpdate({ text, days, trip: planTrip, insights });
+    if (visualUpdate) {
+      setDays(visualUpdate.days);
+      setPlanTrip(visualUpdate.trip);
+      setInsights(visualUpdate.insights);
+      toast({ title: 'Roteiro atualizado', tone: 'success', desc: visualUpdate.notes.join(' · ') });
+    }
+  };
+
+  const completeGuidedFlow = async (txt) => {
+    const t = txt.trim();
+    const nextChat = [...chat, { who: 'user', text: t }];
+    const response = await sendChatMessage({
+      message: t,
+      messages: nextChat.map((m) => ({
+        role: m.who === 'user' ? 'user' : 'assistant',
+        content: m.text,
+      })).filter((m) => m.content),
+    });
+    applyResponseEffects(t, response);
+    const hasFinalError = FINAL_ERROR_SOURCES.includes(response.source);
+    return {
+      text: response.reply || (hasFinalError
+        ? 'Não consegui acessar dados reais agora. Prefiro não te mostrar informações imprecisas. Tenta novamente daqui a pouquinho.'
+        : planChatFallbackReply(t)),
+      error: hasFinalError,
+    };
+  };
+
   const send = async (txt) => {
     const t = (txt || draft).trim();
     if (!t) return;
@@ -97,19 +134,7 @@ const PlanScreen = ({ kickoff, clearKickoff, setRoute, trip }) => {
       })).filter((m) => m.content),
     });
     setTyping(false);
-    if (response.tools?.buscarHoteis?.options?.length) {
-      saveHotelSearchResults(response.tools.buscarHoteis.options, { status: response.tools.buscarHoteis.status });
-    }
-    if (response.tools?.buscarVoos?.options?.length) {
-      saveFlightSearchResults(response.tools.buscarVoos.options, { status: response.tools.buscarVoos.status });
-    }
-    const visualUpdate = applyPlanAgentUpdate({ text: t, days, trip: planTrip, insights });
-    if (visualUpdate) {
-      setDays(visualUpdate.days);
-      setPlanTrip(visualUpdate.trip);
-      setInsights(visualUpdate.insights);
-      toast({ title: 'Roteiro atualizado', tone: 'success', desc: visualUpdate.notes.join(' · ') });
-    }
+    applyResponseEffects(t, response);
     setChat(c => [...c, {
       who: 'voya',
       text: response.reply || planChatFallbackReply(t),
@@ -155,7 +180,7 @@ const PlanScreen = ({ kickoff, clearKickoff, setRoute, trip }) => {
         </header>
 
         <div ref={chatEndRef} className="flex-1 overflow-y-auto px-7 py-5 space-y-4">
-          {chat.map((m, i) => <Bubble key={i} m={m} onCta={(t) => send(t)} />)}
+          {chat.map((m, i) => <Bubble key={i} m={m} onCta={(t) => send(t)} onGuidedComplete={completeGuidedFlow} />)}
           {typing && (
             <div className="flex gap-1 pt-2">
               <span className="dot h-1.5 w-1.5 rounded-full bg-ink-400"/>
@@ -243,7 +268,7 @@ const PlanScreen = ({ kickoff, clearKickoff, setRoute, trip }) => {
 };
 
 // ---------- Chat bubble ----------
-const Bubble = ({ m, onCta }) => {
+const Bubble = ({ m, onCta, onGuidedComplete }) => {
   if (m.who === 'user') {
     return (
       <div className="flex justify-end">
@@ -269,7 +294,7 @@ const Bubble = ({ m, onCta }) => {
         </div>
       )}
       {m.guidedPaths && (
-        <GuidedTravelWizard paths={m.guidedPaths} onComplete={onCta} />
+        <GuidedTravelWizard paths={m.guidedPaths} onComplete={onGuidedComplete} />
       )}
     </div>
   );
