@@ -9,7 +9,19 @@ const ExpertsScreen = ({ setRoute, initialOpen, clearInitialOpen }) => {
   const [open, setOpen] = useState(null);
   const [routeDetail, setRouteDetail] = useState(null);
   const [filter, setFilter] = useState('todos');
+  const [search, setSearch] = useState('');
+  const [searchOpen, setSearchOpen] = useState(false);
+  const searchRef = useRef(null);
   const toast = useToast();
+
+  useEffect(() => {
+    if (!searchOpen) return;
+    const onDoc = (event) => {
+      if (!searchRef.current?.contains(event.target)) setSearchOpen(false);
+    };
+    document.addEventListener('mousedown', onDoc);
+    return () => document.removeEventListener('mousedown', onDoc);
+  }, [searchOpen]);
 
   // Region/spec filters — explicit and on-brand.
   const filters = [
@@ -37,10 +49,72 @@ const ExpertsScreen = ({ setRoute, initialOpen, clearInitialOpen }) => {
     return (e.regions || []).includes(filter) || e.specs.includes(filter) || e.region.includes(filter);
   });
 
+  const searchResults = search.trim().length === 0 ? [] : mockData.experts.filter(e => {
+    const q = search.toLowerCase();
+    return (
+      e.name.toLowerCase().includes(q) ||
+      e.region.toLowerCase().includes(q) ||
+      (e.regions || []).some(r => r.toLowerCase().includes(q)) ||
+      e.specs.some(s => s.toLowerCase().includes(q)) ||
+      e.bio.toLowerCase().includes(q)
+    );
+  }).slice(0, 6);
+
   return (
     <div className="min-h-screen">
       <Topbar subtitle="Voya · Experts" title="Pessoas que viajam por você"
-        right={<Button variant="secondary" icon={Icon.Search}>Buscar especialista</Button>}/>
+        right={
+          <div ref={searchRef} className="relative">
+            <div className={`flex items-center gap-2 px-3 h-10 rounded-xl border-half bg-white transition-shadow w-[300px]
+                            ${searchOpen ? 'shadow-lift border-ink-400' : 'hover:border-ink-400'}`}>
+              <Icon.Search size={14} className="text-ink-500 shrink-0"/>
+              <input
+                value={search}
+                onChange={e => { setSearch(e.target.value); setSearchOpen(true); }}
+                onFocus={() => setSearchOpen(true)}
+                placeholder="Buscar especialista por nome ou destino..."
+                className="flex-1 outline-none text-[13px] bg-transparent placeholder:text-ink-400"/>
+              {search && (
+                <button onClick={() => { setSearch(''); setSearchOpen(false); }}
+                  className="h-5 w-5 rounded-md hover:bg-ink-100 text-ink-500 flex items-center justify-center">
+                  <Icon.X size={11}/>
+                </button>
+              )}
+            </div>
+
+            {searchOpen && search.trim() && (
+              <div className="absolute top-[calc(100%+6px)] right-0 w-[420px] bg-white border-half rounded-2xl shadow-pop p-1.5 z-50 pop-down max-h-[440px] overflow-y-auto">
+                <div className="px-3 pt-2 pb-1 flex items-center justify-between">
+                  <div className="text-[10.5px] tracking-wider uppercase font-medium text-ink-500">
+                    {searchResults.length === 0 ? 'Nenhum resultado' : `${searchResults.length} resultado${searchResults.length === 1 ? '' : 's'}`}
+                  </div>
+                  <div className="text-[10.5px] mono text-ink-400">esc</div>
+                </div>
+                {searchResults.length === 0 ? (
+                  <div className="px-3 py-6 text-center">
+                    <div className="text-[13px] text-ink-700">Nenhum expert encontrado para "{search}".</div>
+                    <div className="text-[12px] text-ink-500 mt-1">A Voya pode encontrar um especialista sob medida pelo chat.</div>
+                  </div>
+                ) : searchResults.map(e => (
+                  <button key={e.id}
+                    onClick={() => { setOpen(e); setSearchOpen(false); setSearch(''); }}
+                    className="w-full flex items-center gap-3 px-2.5 py-2 rounded-lg hover:bg-ink-100 transition-colors text-left">
+                    <Portrait id={e.portrait || e.id} alt={e.name} className="h-10 w-10 rounded-full ring-1 ring-ink-200 shrink-0"/>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-[13px] font-medium text-ink-900 truncate">{e.name}</div>
+                      <div className="text-[11.5px] text-ink-500 truncate">{e.region} · {e.trips} viagens</div>
+                    </div>
+                    <div className="flex items-center gap-1 text-[11px] text-ink-500 shrink-0">
+                      <Icon.Star size={10}/>{e.rating}
+                    </div>
+                  </button>
+                ))}
+                <div className="h-px bg-ink-200 mx-2 my-1.5"/>
+                <div className="px-3 py-2 text-[11px] text-ink-500">Buscando por nome, destino, especialidade.</div>
+              </div>
+            )}
+          </div>
+        }/>
 
       {/* editorial hero */}
       <div className="px-10 mb-8">
@@ -53,17 +127,32 @@ const ExpertsScreen = ({ setRoute, initialOpen, clearInitialOpen }) => {
             </h2>
             <p className="text-[14.5px] text-ink-600 mt-4 leading-relaxed max-w-[560px]">
               Nossos experts moram nos destinos, conhecem o concierge do restaurante, sabem qual dia da semana o museu vazio fica vazio.
-              Eles supervisionam o roteiro que a Voya monta — e atendem por mensagem em minutos.
+              Eles supervisionam pessoalmente o roteiro que a Voya monta para você.
             </p>
             <div className="mt-6 flex items-center gap-3">
-              <Button onClick={() => toast({title:'Mensagem enviada à Inês', tone:'success'})} icon={Icon.Sparkles}>Falar com expert agora</Button>
-              <Button variant="ghost" iconRight={Icon.ArrowRight} onClick={() => setRoute('explore')}>Ver roteiros assinados</Button>
+              <Button iconRight={Icon.ArrowRight} onClick={() => setRoute('explore')}>Ver roteiros assinados</Button>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-2 p-2 bg-canvas">
-            {mockData.experts.slice(0, 4).map(e => (
-              <SmartImg key={e.id} seed={`expert-hero-${e.id}`} tone={e.tone} label={e.region.split(' ')[0]} w={400} h={400} className="aspect-square rounded-xl"/>
-            ))}
+          <div className="flex items-center justify-center bg-canvas p-8">
+            <div className="relative h-[220px] w-[280px]">
+              {mockData.experts.slice(0, 5).map((e, i) => {
+                const positions = [
+                  { left: 0,   top: 30,  size: 96, z: 3 },
+                  { left: 80,  top: 0,   size: 110, z: 5 },
+                  { left: 170, top: 50,  size: 90, z: 2 },
+                  { left: 50,  top: 110, size: 84, z: 4 },
+                  { left: 160, top: 130, size: 80, z: 1 },
+                ];
+                const p = positions[i];
+                return (
+                  <div key={e.id}
+                    className="absolute rounded-full ring-2 ring-paper shadow-soft overflow-hidden"
+                    style={{ left: p.left, top: p.top, width: p.size, height: p.size, zIndex: p.z }}>
+                    <Portrait id={e.portrait || e.id} alt={e.name} className="h-full w-full"/>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </Card>
       </div>
@@ -105,14 +194,14 @@ const ExpertsScreen = ({ setRoute, initialOpen, clearInitialOpen }) => {
       <Modal open={!!open} onClose={() => setOpen(null)} size="lg" title={open?.name || ''}
         footer={open && <>
           <Button variant="ghost" onClick={() => setOpen(null)}>Fechar</Button>
-          <Button icon={Icon.Mail} onClick={() => { setOpen(null); toast({title:`Mensagem enviada para ${open.name}`, tone:'success', desc:'Resposta em ~2 min'}); }}>
-            Falar com {open.name.split(' ')[0]}
+          <Button icon={Icon.Sparkles} onClick={() => { setOpen(null); toast({title:`${open.name.split(' ')[0]} vai assinar seu próximo roteiro`, tone:'success'}); setRoute('plan'); }}>
+            Usar {open.name.split(' ')[0]} no meu roteiro
           </Button>
         </>}>
         {open && (
           <div className="space-y-5">
-            <div className="grid grid-cols-[200px_1fr] gap-5">
-              <SmartImg seed={`expert-portrait-${open.id}`} tone={open.tone} w={400} h={500} className="h-[200px] rounded-xl"/>
+            <div className="grid grid-cols-[180px_1fr] gap-5">
+              <Portrait id={open.portrait || open.id} alt={open.name} className="h-[180px] w-[180px] rounded-full ring-1 ring-ink-200"/>
               <div>
                 <Tag tone="ink"><Icon.Star size={11}/> {open.rating} · {open.trips} viagens</Tag>
                 <div className="text-[22px] font-medium tracking-tight text-ink-900 mt-3">{open.name}</div>
@@ -151,14 +240,14 @@ const ExpertsScreen = ({ setRoute, initialOpen, clearInitialOpen }) => {
                   </div>
                 ))}
                 {mockData.routes.filter(r => r.expert === open.name).length === 0 && (
-                  <div className="col-span-2 text-[12.5px] text-ink-500 bg-ink-50 rounded-xl p-4">Roteiros sob medida — fala com {open.name.split(' ')[0]}.</div>
+                  <div className="col-span-2 text-[12.5px] text-ink-500 bg-ink-50 rounded-xl p-4">Roteiros sob medida com curadoria de {open.name.split(' ')[0]}.</div>
                 )}
               </div>
             </div>
 
             <div className="grid grid-cols-3 gap-3">
-              <Mini label="Resposta média" value={`~${open.responseMin} min`} tone="sage"/>
-              <Mini label="Aprovação" value="98%" tone="sage"/>
+              <Mini label="Viagens" value={open.trips}/>
+              <Mini label="Roteiros" value={open.routes}/>
               <Mini label="Idiomas" value="PT · EN · ES"/>
             </div>
           </div>
@@ -174,44 +263,65 @@ const ExpertsScreen = ({ setRoute, initialOpen, clearInitialOpen }) => {
   );
 };
 
-// ---------- Expert card with portrait + stats ----------
+const portraitIds = {
+  ines: 47,
+  kenji: 13,
+  leila: 32,
+  matheus: 60,
+  ayla: 25,
+  pedro: 53,
+};
+
+const Portrait = ({ id = 1, className = '', alt = '' }) => {
+  const numericId = Number.isFinite(Number(id))
+    ? Number(id)
+    : portraitIds[id] || Math.abs(String(id).split('').reduce((sum, char) => sum + char.charCodeAt(0), 0)) % 70;
+  return (
+    <img
+      src={`https://i.pravatar.cc/300?img=${numericId || 1}`}
+      alt={alt}
+      className={`object-cover ${className}`}
+      loading="lazy"
+    />
+  );
+};
+
+// ---------- Expert card with circular portrait + reordered layout ----------
 const ExpertCard = ({ expert, onOpen }) => {
   return (
     <button onClick={onOpen}
-      className="bg-white border-half rounded-2xl overflow-hidden text-left card-h flex">
-      {/* Portrait left, fixed */}
-      <SmartImg seed={`expert-${expert.id}`} tone={expert.tone} w={400} h={500} className="w-[200px] shrink-0"/>
-
-      {/* Body right */}
-      <div className="flex-1 p-5 flex flex-col min-w-0">
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0">
-            <div className="text-[17px] font-medium text-ink-900 tracking-tight">{expert.name}</div>
-            <div className="text-[12px] text-ink-500 mt-0.5">{expert.region}</div>
+      className="bg-white border-half rounded-2xl text-left card-h p-6 flex flex-col">
+      <div className="flex items-start gap-4">
+        <div className="relative shrink-0">
+          <Portrait id={expert.portrait || expert.id} alt={expert.name} className="h-[88px] w-[88px] rounded-full ring-1 ring-ink-200"/>
+          <div className="absolute -bottom-1 -right-1 bg-paper border-half rounded-full h-6 px-2 flex items-center gap-1 text-[10.5px] font-medium text-ink-900 shadow-soft">
+            <Icon.Star size={9}/> {expert.rating}
           </div>
-          <Tag tone="ink" className="shrink-0"><Icon.Star size={10}/> {expert.rating}</Tag>
         </div>
-
-        <div className="serif-i text-[14.5px] text-ink-700 mt-3 leading-snug line-clamp-2">"{expert.quote}"</div>
-
-        {/* Stats row */}
-        <div className="grid grid-cols-3 gap-2 mt-4">
-          <StatTile value={expert.trips}    label="viagens"/>
-          <StatTile value={expert.routes}   label="roteiros"/>
-          <StatTile value={`~${expert.responseMin}m`} label="resposta"/>
+        <div className="flex-1 min-w-0 pt-1">
+          <div className="text-[18px] font-medium text-ink-900 tracking-tight leading-tight">{expert.name}</div>
+          <div className="text-[12.5px] text-ink-500 mt-0.5">{expert.region}</div>
+          <div className="text-[11.5px] text-ink-500 mt-2">{expert.years} anos no destino</div>
         </div>
+      </div>
 
-        {/* Specs + footer */}
-        <div className="mt-4 flex items-center gap-1.5 flex-wrap">
-          {expert.specs.slice(0,3).map(s => (
-            <span key={s} className="text-[10.5px] px-2 h-5 rounded-full bg-ink-100 text-ink-700 flex items-center whitespace-nowrap">{s}</span>
-          ))}
-        </div>
+      <div className="serif-i text-[14.5px] text-ink-700 mt-5 leading-snug line-clamp-2">"{expert.quote}"</div>
 
-        <div className="mt-auto pt-4 flex items-center justify-between gap-2 text-[11.5px] text-ink-500">
-          <span className="whitespace-nowrap">{expert.years} anos no destino</span>
-          <span className="text-ink-900 font-medium inline-flex items-center gap-1 whitespace-nowrap">Ver perfil <Icon.ArrowRight size={11}/></span>
-        </div>
+      <div className="grid grid-cols-3 gap-2 mt-4">
+        <StatTile value={expert.trips}    label="viagens"/>
+        <StatTile value={expert.routes}   label="roteiros"/>
+        <StatTile value={expert.years}    label="anos"/>
+      </div>
+
+      <div className="mt-4 flex items-center gap-1.5 flex-wrap">
+        {expert.specs.slice(0,3).map(s => (
+          <span key={s} className="text-[10.5px] px-2 h-5 rounded-full bg-ink-100 text-ink-700 flex items-center whitespace-nowrap">{s}</span>
+        ))}
+      </div>
+
+      <div className="mt-auto pt-5 flex items-center justify-between gap-2 text-[11.5px] text-ink-500 border-t hairline">
+        <span className="whitespace-nowrap">Idiomas · PT · EN · ES</span>
+        <span className="text-ink-900 font-medium inline-flex items-center gap-1 whitespace-nowrap">Ver perfil <Icon.ArrowRight size={11}/></span>
       </div>
     </button>
   );
