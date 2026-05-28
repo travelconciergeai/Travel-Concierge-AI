@@ -2,6 +2,7 @@
 import React, { useEffect, useState } from 'react';
 import { mockData } from './mockData.jsx';
 import { isRealDataMode } from './lib/dataMode.js';
+import { getStoredTripById, getStoredTrips, subscribeTrips } from './lib/tripDraftState.js';
 import { CmdPalette, Sidebar, ToastProvider } from './ui.jsx';
 import { HomeScreen } from './screens/HomeScreen.jsx';
 import { PlanScreen } from './screens/PlanScreen.jsx';
@@ -23,9 +24,22 @@ const App = () => {
   // Which trip is currently active in the Plan screen. Default is the Portugal
   // trip; switches to Disney when the Home wizard completes.
   const [activeTripId, setActiveTripId] = useState('trip-lisboa-porto');
+  const [realTrips, setRealTrips] = useState(() => (isRealDataMode() ? getStoredTrips() : []));
   const activeTrip = isRealDataMode()
-    ? null
+    ? getStoredTripById(activeTripId) || realTrips.find(Boolean) || null
     : activeTripId === 'trip-disney' ? mockData.disneyTrip : mockData.trip;
+
+  useEffect(() => {
+    if (!isRealDataMode()) return undefined;
+    const syncTrips = (trips) => {
+      setRealTrips(trips);
+      if (!activeTripId || activeTripId === 'trip-lisboa-porto') {
+        setActiveTripId(trips[0]?.id || 'trip-lisboa-porto');
+      }
+    };
+    syncTrips(getStoredTrips());
+    return subscribeTrips(syncTrips);
+  }, [activeTripId]);
 
   useEffect(() => {
     const onKey = (e) => {
@@ -49,9 +63,9 @@ const App = () => {
       case 'miles':   return <MilesScreen   setRoute={setRoute} />;
       case 'experts': return <ExpertsScreen setRoute={setRoute} initialOpen={expertToOpen} clearInitialOpen={() => setExpertToOpen(null)} />;
       case 'explore': return <ExploreScreen setRoute={setRoute} openExpertProfile={(id) => setExpertToOpen(id)} />;
-      case 'trips':   return <TripsScreen   setRoute={setRoute} />;
+      case 'trips':   return <TripsScreen   setRoute={setRoute} setActiveTripId={setActiveTripId} />;
       case 'flights': return <FlightsScreen setRoute={setRoute} />;
-      case 'hotels':  return <HotelsScreen  setRoute={setRoute} />;
+      case 'hotels':  return <HotelsScreen  setRoute={setRoute} setActiveTripId={setActiveTripId} />;
       case 'tours':   return <ToursScreen   setRoute={setRoute} />;
       case 'plans':   return <PlansScreen   setRoute={setRoute} />;
       default:        return <HomeScreen    setRoute={setRoute} />;

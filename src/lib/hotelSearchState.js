@@ -13,7 +13,20 @@ function formatReviews(count) {
   return `${Number(count).toLocaleString('pt-BR')} avaliações`;
 }
 
-export function mapHotelSearchResult(hotel, index = 0) {
+function formatMoney(value, currency = 'BRL') {
+  if (value === undefined || value === null || value === '') return null;
+  if (typeof value === 'string') return value;
+  const amount = Number(value);
+  if (!Number.isFinite(amount)) return String(value);
+  return new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency,
+    maximumFractionDigits: 0,
+  }).format(amount);
+}
+
+export function mapHotelSearchResult(hotel, index = 0, meta = {}) {
+  const currency = hotel.currency || meta.currency || 'BRL';
   return {
     id: hotel.id || `hotel-${index}`,
     name: hotel.name || 'Hotel sugerido',
@@ -22,13 +35,16 @@ export function mapHotelSearchResult(hotel, index = 0) {
     rating: hotel.rating || 0,
     reviewCount: hotel.reviewCount || 0,
     nights: hotel.nights || 4,
-    price: hotel.nightlyRate || hotel.totalRate || 'Sob consulta',
-    nightlyRate: hotel.nightlyRate || 'Sob consulta',
+    price: formatMoney(hotel.totalRate, currency) || formatMoney(hotel.nightlyRate, currency) || 'Sob consulta',
+    nightlyRate: formatMoney(hotel.nightlyRate, currency) || 'Sob consulta',
+    totalRate: formatMoney(hotel.totalRate, currency) || null,
     perk: hotel.matchReason || hotel.bestFor || formatReviews(hotel.reviewCount) || 'Curadoria Voya',
     tone: tones[index % tones.length],
     tag: hotel.provider ? String(hotel.provider).toUpperCase() : 'Voya Collection',
     bookingUrl: hotel.bookingUrl || null,
     provider: hotel.provider || null,
+    searchStatus: meta.status || hotel.status || null,
+    searchQuery: meta.query || null,
     cancellationPolicy: hotel.cancellationPolicy || 'A confirmar',
     raw: hotel,
   };
@@ -38,13 +54,13 @@ export function getStoredHotelSearchResults() {
   try {
     const payload = JSON.parse(window.localStorage.getItem(HOTEL_SEARCH_STORAGE_KEYS[DATA_MODE]) || 'null');
     if (!Array.isArray(payload?.options)) return [];
-    return payload.options.map(mapHotelSearchResult);
+    return payload.options.map((hotel, index) => mapHotelSearchResult(hotel, index, payload));
   } catch {
     return [];
   }
 }
 
-export function saveHotelSearchResults(options = [], { status = 'mocked' } = {}) {
+export function saveHotelSearchResults(options = [], { status = 'mocked', query = null } = {}) {
   if (!Array.isArray(options) || !options.length) return;
   if (isRealDataMode() && status !== 'live') return;
 
@@ -52,13 +68,14 @@ export function saveHotelSearchResults(options = [], { status = 'mocked' } = {})
     savedAt: Date.now(),
     dataMode: DATA_MODE,
     status,
+    query,
     options,
   }));
-  window.dispatchEvent(new CustomEvent(HOTEL_SEARCH_EVENT, { detail: { options, status } }));
+  window.dispatchEvent(new CustomEvent(HOTEL_SEARCH_EVENT, { detail: { options, status, query } }));
 }
 
 export function subscribeHotelSearchResults(callback) {
-  const handler = (event) => callback((event.detail?.options || []).map(mapHotelSearchResult));
+  const handler = (event) => callback((event.detail?.options || []).map((hotel, index) => mapHotelSearchResult(hotel, index, event.detail || {})));
   window.addEventListener(HOTEL_SEARCH_EVENT, handler);
   return () => window.removeEventListener(HOTEL_SEARCH_EVENT, handler);
 }

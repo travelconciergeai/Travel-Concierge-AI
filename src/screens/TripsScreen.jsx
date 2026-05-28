@@ -2,14 +2,23 @@ import React, { useEffect, useRef, useState } from "react";
 import { Icon } from "../icons.jsx";
 import { mockData } from "../mockData.jsx";
 import { isMockDataMode, isRealDataMode } from "../lib/dataMode.js";
+import { getStoredTrips, subscribeTrips } from "../lib/tripDraftState.js";
 import { Placeholder, Button, Card, Drawer, Modal, OptimizeMenu, SectionHeader, SmartImg, Stat, TabRow, Tag, Topbar, useToast } from "../ui.jsx";
 
 // My Trips — list across states: active, planning, idea, completed.
 
-const TripsScreen = ({ setRoute }) => {
+const TripsScreen = ({ setRoute, setActiveTripId }) => {
   const [filter, setFilter] = useState('todas');
-  const trips = isMockDataMode() ? mockData.trips : [];
+  const [realTrips, setRealTrips] = useState(() => getStoredTrips());
+  const trips = isMockDataMode() ? mockData.trips : realTrips;
   const list = trips.filter(t => filter === 'todas' || mapState(t.state) === filter);
+
+  useEffect(() => subscribeTrips(setRealTrips), []);
+
+  const openTrip = (trip) => {
+    setActiveTripId?.(trip.id);
+    setRoute('plan');
+  };
 
   return (
     <div className="min-h-screen">
@@ -38,7 +47,7 @@ const TripsScreen = ({ setRoute }) => {
           </Card>
         )}
         {list.map(t => (
-          <Card key={t.id} hover className="overflow-hidden" onClick={() => setRoute('plan')}>
+          <Card key={t.id} hover className="overflow-hidden" onClick={() => openTrip(t)}>
             <div className="grid grid-cols-[200px_1fr]">
               <SmartImg seed={`trip-${t.id}`} tone={t.tone} label={t.cover} w={400} h={400} className="min-h-[180px]"/>
               <div className="p-5 flex flex-col">
@@ -50,6 +59,11 @@ const TripsScreen = ({ setRoute }) => {
                 </div>
                 <div className="text-[17px] font-medium tracking-tight text-ink-900 mt-3 leading-snug">{t.title}</div>
                 <div className="text-[12.5px] text-ink-500 mt-1">{t.dates} · {t.travelers} viajantes</div>
+                {t.appliedHotel && (
+                  <div className="text-[12px] text-sage-700 mt-2 flex items-center gap-1.5">
+                    <Icon.Bed size={11}/> {t.appliedHotel.name}
+                  </div>
+                )}
 
                 <div className="mt-auto pt-4">
                   <div className="flex items-center justify-between text-[11.5px] text-ink-500 mb-1.5">

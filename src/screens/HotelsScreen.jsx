@@ -2,12 +2,13 @@ import React, { useEffect, useRef, useState } from "react";
 import { Icon } from "../icons.jsx";
 import { mockData } from "../mockData.jsx";
 import { getStoredHotelSearchResults, subscribeHotelSearchResults } from "../lib/hotelSearchState.js";
+import { applyHotelToProgressiveTrip } from "../lib/tripDraftState.js";
 import { isMockDataMode, isRealDataMode } from "../lib/dataMode.js";
 import { Placeholder, Button, Card, Drawer, Modal, OptimizeMenu, SectionHeader, SmartImg, Stat, TabRow, Tag, Topbar, useToast } from "../ui.jsx";
 
 // Hotels — Voya Collection editorial.
 
-const HotelsScreen = ({ setRoute }) => {
+const HotelsScreen = ({ setRoute, setActiveTripId }) => {
   const [open, setOpen] = useState(null);
   const [searchHotels, setSearchHotels] = useState(() => getStoredHotelSearchResults());
   const toast = useToast();
@@ -21,6 +22,21 @@ const HotelsScreen = ({ setRoute }) => {
       return;
     }
     toast({title:'Reserva enviada', tone:'success', desc:`${hotel.name} · ${hotel.nights} noites`});
+  };
+
+  const applyToTrip = (hotel) => {
+    const trip = applyHotelToProgressiveTrip(hotel);
+    if (!trip) {
+      toast({ title: 'Hotel não aplicado', desc: 'Use um resultado real antes de criar o roteiro.', tone: 'info' });
+      return;
+    }
+    setActiveTripId?.(trip.id);
+    toast({
+      title: 'Hotel aplicado ao roteiro',
+      tone: 'success',
+      desc: 'Voos, passeios e dias ficaram prontos para completar.',
+    });
+    setRoute('plan');
   };
 
   return (
@@ -47,9 +63,27 @@ const HotelsScreen = ({ setRoute }) => {
               <div className="text-[16px] font-medium text-ink-900 mt-3">{h.name}</div>
               <div className="text-[12px] text-ink-500 mt-0.5 flex items-center gap-1.5"><Icon.MapPin size={11}/> {h.city}</div>
               <div className="text-[12px] text-sage-700 mt-3 flex items-center gap-1.5"><Icon.Sparkles size={11}/> {h.perk}</div>
-              <div className="mt-4 pt-4 border-t hairline flex items-center justify-between">
-                <div className="text-[11.5px] text-ink-500">{h.nights} noites · total</div>
-                <div className="text-[16px] font-medium text-ink-900">{h.price}</div>
+              <div className="mt-4 pt-4 border-t hairline flex items-start justify-between gap-3">
+                <div>
+                  <div className="text-[11.5px] text-ink-500">por noite</div>
+                  <div className="text-[16px] font-medium text-ink-900">{h.nightlyRate}</div>
+                  {h.totalRate && <div className="text-[11.5px] text-ink-500 mt-0.5">{h.totalRate} total</div>}
+                </div>
+                <div className="flex flex-col gap-1.5 shrink-0">
+                  <button
+                    disabled={!h.bookingUrl}
+                    onClick={(event) => { event.stopPropagation(); if (h.bookingUrl) openBooking(h); }}
+                    className={`h-8 px-3 rounded-full text-[12px] font-medium inline-flex items-center justify-center gap-1.5 ${
+                      h.bookingUrl ? 'bg-ink-900 text-paper hover:bg-ink-800' : 'bg-ink-100 text-ink-400 cursor-not-allowed'
+                    }`}>
+                    <Icon.ArrowUpRight size={11}/> Reservar
+                  </button>
+                  <button
+                    onClick={(event) => { event.stopPropagation(); applyToTrip(h); }}
+                    className="h-8 px-3 rounded-full border-half bg-white text-[12px] text-ink-800 hover:bg-ink-50 inline-flex items-center justify-center gap-1.5">
+                    <Icon.Check size={11}/> Aplicar ao roteiro
+                  </button>
+                </div>
               </div>
             </div>
           </Card>
@@ -60,9 +94,12 @@ const HotelsScreen = ({ setRoute }) => {
         footer={open && <>
           <Button variant="ghost" onClick={()=>setOpen(null)}>Fechar</Button>
           <Button icon={Icon.Heart} variant="secondary">Salvar</Button>
-          <Button icon={Icon.Check} onClick={()=>{openBooking(open); setOpen(null);}}>
-            Reservar
+          <Button icon={Icon.Check} variant="secondary" onClick={()=>{applyToTrip(open); setOpen(null);}}>
+            Aplicar ao roteiro
           </Button>
+          {open.bookingUrl && <Button icon={Icon.ArrowUpRight} onClick={()=>{openBooking(open); setOpen(null);}}>
+            Reservar
+          </Button>}
         </>}>
         {open && (
           <div className="space-y-5">
@@ -78,19 +115,21 @@ const HotelsScreen = ({ setRoute }) => {
             <div className="grid grid-cols-4 gap-3">
               <Mini3 label="Avaliação" value={`${open.rating} ★`} tone="sage"/>
               <Mini3 label="Noites" value={open.nights}/>
-              <Mini3 label="Total" value={open.price}/>
-              <Mini3 label="Cancelamento" value="Grátis 48h" tone="sage"/>
+              <Mini3 label="Noite" value={open.nightlyRate}/>
+              <Mini3 label="Total" value={open.totalRate || open.price}/>
             </div>
             <div className="bg-brand-50 border border-brand-100 rounded-xl p-4 flex gap-3">
               <Icon.Sparkles size={16} className="text-brand-700 mt-0.5"/>
               <div className="text-[13px] text-brand-900">
-                <span className="font-medium">Voya Perk:</span> {open.perk}. Aplicado automaticamente na sua reserva via Voya Signature.
+                <span className="font-medium">Motivo da recomendação:</span> {open.perk}.
               </div>
             </div>
             <div>
               <div className="label mb-2">O hotel</div>
-              <p className="text-[13.5px] text-ink-700 leading-relaxed">Boutique premiado com vista para o rio. Spa, restaurante autoral e atendimento sob medida.
-                Selecionado pessoalmente pela expert Inês Marçal, que reserva o quarto orientado para o pôr do sol pra você.</p>
+              <p className="text-[13.5px] text-ink-700 leading-relaxed">
+                Resultado do provider {open.provider || 'conectado'} com dados reais de imagem, preço, avaliação e link quando disponíveis.
+                Ao aplicar ao roteiro, ele vira a primeira peça confirmada da viagem progressiva.
+              </p>
             </div>
           </div>
         )}

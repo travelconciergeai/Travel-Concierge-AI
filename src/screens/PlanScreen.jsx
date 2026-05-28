@@ -85,7 +85,10 @@ const PlanScreen = ({ kickoff, clearKickoff, setRoute, trip }) => {
 
   const applyResponseEffects = (text, response) => {
     if (response.tools?.buscarHoteis?.options?.length) {
-      saveHotelSearchResults(response.tools.buscarHoteis.options, { status: response.tools.buscarHoteis.status });
+      saveHotelSearchResults(response.tools.buscarHoteis.options, {
+        status: response.tools.buscarHoteis.status,
+        query: response.tools.buscarHoteis.query,
+      });
     }
     if (response.tools?.buscarVoos?.options?.length) {
       saveFlightSearchResults(response.tools.buscarVoos.options, { status: response.tools.buscarVoos.status });
@@ -235,6 +238,7 @@ const PlanScreen = ({ kickoff, clearKickoff, setRoute, trip }) => {
                     onCalendar={() => setCalOpen(true)}
                     onExport={() => setExportOpen(true)}/>
         <Insights insights={insights}/>
+        {planTrip.nextSteps?.length > 0 && <ProgressiveNextSteps steps={planTrip.nextSteps}/>}
         <Timeline
           days={days}
           onAdd={(dayIdx, slot) => setAdding({ dayIdx, slot })}
@@ -304,6 +308,7 @@ const Bubble = ({ m, onCta, onGuidedComplete }) => {
 const PlanHeader = ({ trip, days, activeMode, onApplyMode, onShare, onCalendar, onExport }) => {
   const total = days.reduce((s, d) => s + d.items.length, 0);
   const confirmed = days.reduce((s, d) => s + d.items.filter(i => i.conf).length, 0);
+  const progress = total ? Math.round((confirmed / total) * 100) : 0;
   return (
     <div className="px-8 pt-7 pb-5 border-b hairline bg-paper">
       <div className="flex items-start gap-5">
@@ -347,11 +352,11 @@ const PlanHeader = ({ trip, days, activeMode, onApplyMode, onShare, onCalendar, 
       <div className="mt-5">
         <div className="flex items-center justify-between text-[11.5px] text-ink-500 mb-1.5">
           <span>Progresso do roteiro</span>
-          <span>{Math.round((confirmed / total) * 100)}%</span>
+          <span>{progress}%</span>
         </div>
         <div className="h-1.5 rounded-full bg-ink-100 overflow-hidden">
           <div className="h-full bg-ink-900 rounded-full transition-all duration-500"
-               style={{ width: `${Math.round((confirmed / total) * 100)}%` }}/>
+               style={{ width: `${progress}%` }}/>
         </div>
       </div>
     </div>
@@ -388,6 +393,26 @@ const Insights = ({ insights }) => {
     </div>
   );
 };
+
+const ProgressiveNextSteps = ({ steps }) => (
+  <div className="px-8 py-4 border-b hairline bg-paper">
+    <div className="flex items-center gap-2 mb-3">
+      <div className="h-7 w-7 rounded-lg bg-ink-900 text-paper flex items-center justify-center"><Icon.Sparkles size={13}/></div>
+      <div>
+        <div className="text-[13px] font-medium text-ink-900">Próximos passos</div>
+        <div className="text-[11.5px] text-ink-500">Complete esta viagem aos poucos.</div>
+      </div>
+    </div>
+    <div className="flex flex-wrap gap-2">
+      {steps.map((step) => (
+        <button key={step}
+          className="h-8 px-3 rounded-full border-half bg-white text-[12px] text-ink-700 hover:bg-ink-50 inline-flex items-center gap-1.5">
+          <Icon.ArrowRight size={11}/> {step}
+        </button>
+      ))}
+    </div>
+  </div>
+);
 
 // ---------- Timeline ----------
 const Timeline = ({ days, onAdd, onEdit, onTogglePin, onRemove }) => {

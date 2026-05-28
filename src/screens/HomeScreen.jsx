@@ -108,7 +108,10 @@ const HomeScreen = ({ setRoute, kickoffPlan, setActiveTripId }) => {
       messages: nextChat.map(m => ({ role: m.who === 'agent' ? 'assistant' : 'user', content: m.text || '' })),
     });
     if (response.tools?.buscarHoteis?.options?.length) {
-      saveHotelSearchResults(response.tools.buscarHoteis.options, { status: response.tools.buscarHoteis.status });
+      saveHotelSearchResults(response.tools.buscarHoteis.options, {
+        status: response.tools.buscarHoteis.status,
+        query: response.tools.buscarHoteis.query,
+      });
     }
     if (response.tools?.buscarVoos?.options?.length) {
       saveFlightSearchResults(response.tools.buscarVoos.options, { status: response.tools.buscarVoos.status });
