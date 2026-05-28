@@ -27,77 +27,6 @@ const FALLBACK_REPLIES = [
 
 const instructions = VOYA_AGENT_SYSTEM_PROMPT;
 
-const OPENAI_AGENT_TOOLS = [
-  {
-    type: 'function',
-    name: 'hotelSearch',
-    description: 'Busca hotéis pelo hotelSearchEngine da Voya, usando provider real quando configurado, ranking consultivo e expert matching.',
-    strict: true,
-    parameters: {
-      type: 'object',
-      additionalProperties: false,
-      properties: {
-        message: {
-          type: 'string',
-          description: 'Mensagem original do usuário com destino, perfil, orçamento e preferências.',
-        },
-      },
-      required: ['message'],
-    },
-  },
-  {
-    type: 'function',
-    name: 'flightSearch',
-    description: 'Busca e ranqueia voos com foco em preço, duração, família, milhas, Wallet e risco de conexão.',
-    strict: true,
-    parameters: {
-      type: 'object',
-      additionalProperties: false,
-      properties: {
-        message: {
-          type: 'string',
-          description: 'Mensagem original do usuário com origem, destino, datas e perfil.',
-        },
-      },
-      required: ['message'],
-    },
-  },
-  {
-    type: 'function',
-    name: 'criarRoteiro',
-    description: 'Cria uma proposta inicial de roteiro quando o usuário pedir para montar uma viagem ou roteiro.',
-    strict: true,
-    parameters: {
-      type: 'object',
-      additionalProperties: false,
-      properties: {
-        message: {
-          type: 'string',
-          description: 'Mensagem original do usuário com destino, duração e perfil.',
-        },
-      },
-      required: ['message'],
-    },
-  },
-  {
-    type: 'function',
-    name: 'editarRoteiro',
-    description: 'Ajusta um roteiro existente quando o usuário pedir alteração de ritmo, orçamento, descanso ou estilo.',
-    strict: true,
-    parameters: {
-      type: 'object',
-      additionalProperties: false,
-      properties: {
-        message: {
-          type: 'string',
-          description: 'Mensagem original do usuário com o ajuste desejado.',
-        },
-      },
-      required: ['message'],
-    },
-  },
-];
-
 function isHotelSearchIntent(message = '') {
   return /hotel|hot[eé]is|hoteis|hospedagem|pousada|resort|di[aá]ria|booking/i.test(message);
 }
@@ -106,38 +35,78 @@ function isFlightSearchIntent(message = '') {
   return /voo|voos|passagem|passagens|a[eé]reo|a[eé]rea/i.test(message);
 }
 
-function getOpenAIToolChoice(message = '') {
-  if (isHotelSearchIntent(message)) return { type: 'function', name: 'hotelSearch' };
-  if (isFlightSearchIntent(message)) return { type: 'function', name: 'flightSearch' };
-  return 'auto';
+function detectIntent(message = '') {
+  const text = message.toLowerCase();
+  if (isHotelSearchIntent(message)) return 'hotel';
+  if (isFlightSearchIntent(message)) return 'voo';
+  if (/passeio|passeios|tour|tours|experi[eê]ncia|experiencias|experiências/i.test(message)) return 'passeio';
+  if (/wallet|cart[aã]o|cartao|milha|milhas|pontos/i.test(message)) return 'wallet-milhas';
+  if (/agenda|calend[aá]rio|calendario/i.test(message)) return 'agenda';
+  if (/pdf|exportar|compartilh[aá]vel|compartilhavel/i.test(message)) return 'pdf';
+  if (/roteiro|montar|criar|planejar|plano|itiner[aá]rio|itinerario|alterar|editar|trocar|descanso|leve|ritmo/i.test(text)) return 'roteiro';
+  return 'geral';
 }
 
-function parseToolArguments(call, message) {
-  try {
-    return JSON.parse(call.arguments || '{}');
-  } catch {
-    return { message };
-  }
-}
-
-async function executeOpenAIToolCall(call, env, message) {
+async function runDeterministicTools({ intent, env, message }) {
   const agentTools = createAgentTools(env);
-  const args = { message, ...parseToolArguments(call, message) };
+  const args = { message };
 
-  if (call.name === 'hotelSearch') {
-    return ['buscarHoteis', await agentTools.buscarHoteis(args)];
+  if (intent === 'hotel') {
+    return {
+      tools: { buscarHoteis: await agentTools.buscarHoteis(args) },
+      toolCalls: [{ name: 'hotelSearch', deterministic: true }],
+    };
   }
-  if (call.name === 'flightSearch') {
-    return ['buscarVoos', await agentTools.buscarVoos(args)];
+  if (intent === 'voo') {
+    return {
+      tools: { buscarVoos: await agentTools.buscarVoos(args) },
+      toolCalls: [{ name: 'flightSearch', deterministic: true }],
+    };
   }
-  if (call.name === 'criarRoteiro') {
-    return ['criarRoteiro', await agentTools.criarRoteiro(args)];
+  if (intent === 'passeio') {
+    return {
+      tools: { buscarPasseios: await agentTools.buscarPasseios(args) },
+      toolCalls: [{ name: 'tourSearch', deterministic: true }],
+    };
   }
-  if (call.name === 'editarRoteiro') {
-    return ['editarRoteiro', await agentTools.editarRoteiro(args)];
+  if (intent === 'wallet-milhas') {
+    const [wallet, miles] = await Promise.all([
+      agentTools.consultarWallet(args),
+      agentTools.sugerirMilhas(args),
+    ]);
+    return {
+      tools: { consultarWallet: wallet, sugerirMilhas: miles },
+      toolCalls: [
+        { name: 'consultarWallet', deterministic: true },
+        { name: 'sugerirMilhas', deterministic: true },
+      ],
+    };
+  }
+  if (intent === 'agenda') {
+    return {
+      tools: { adicionarAgenda: await agentTools.adicionarAgenda(args) },
+      toolCalls: [{ name: 'adicionarAgenda', deterministic: true }],
+    };
+  }
+  if (intent === 'pdf') {
+    return {
+      tools: { gerarPDF: await agentTools.gerarPDF(args) },
+      toolCalls: [{ name: 'gerarPDF', deterministic: true }],
+    };
+  }
+  if (intent === 'roteiro') {
+    const toolName = /alterar|editar|trocar|descanso|leve|ritmo|econom/i.test(message) ? 'editarRoteiro' : 'criarRoteiro';
+    return {
+      tools: { [toolName]: await agentTools[toolName](args) },
+      toolCalls: [{ name: toolName, deterministic: true }],
+    };
   }
 
-  return [call.name, { status: 'error', errorMessage: `Tool desconhecida: ${call.name}` }];
+  return { tools: {}, toolCalls: [] };
+}
+
+function isHotelToolFailure(tool) {
+  return !tool || tool.status === 'not-configured' || tool.status === 'error' || !tool.options?.length;
 }
 
 function fallbackReply(message, tools) {
@@ -194,7 +163,7 @@ function fallbackReply(message, tools) {
   if (toolNames.includes('buscarHoteis')) {
     const hotelTool = tools.buscarHoteis || {};
     if (hotelTool.status === 'not-configured') {
-      return 'Hotel provider não configurado. Para buscar hotéis reais, preencha HOTEL_PROVIDER, HOTEL_API_KEY e HOTEL_API_BASE_URL.';
+      return 'Hotel provider não configurado. Para buscar hotéis reais, preencha HOTEL_PROVIDER e as chaves do provider escolhido, como RAPIDAPI_KEY e RAPIDAPI_HOST para Booking/RapidAPI.';
     }
     if (hotelTool.status === 'error') {
       return 'Não foi possível consultar hotéis reais agora. Não vou inventar hotéis: tente novamente em alguns minutos ou revise a configuração do provider.';
@@ -237,7 +206,24 @@ function fallbackReply(message, tools) {
   return 'Anotado. Para seguir bem, preciso de um detalhe: destino, datas, orçamento ou ritmo da viagem. Qual desses você já tem definido?';
 }
 
-function toOpenAIInput(messages, latestMessage, tools = {}) {
+function buildStructuredContext({ intent, latestMessage, tools }) {
+  return {
+    detectedIntent: intent,
+    originalQuestion: latestMessage,
+    toolResults: tools,
+    responseRules: [
+      'Responda apenas com os dados retornados em toolResults.',
+      'Não responda com roteiro genérico quando detectedIntent for hotel.',
+      'Para hotéis, cite hotéis presentes em toolResults.buscarHoteis.options.',
+      'Para hotéis, explique melhor escolha geral e melhor custo-benefício usando toolResults.buscarHoteis.ranking.',
+      'Inclua bookingUrl quando existir.',
+      'Se não houver dados reais de hotéis, diga que não conseguiu consultar hotéis reais agora.',
+      'Se toolResults tiver status mocked, mencione que os dados ainda são mockados.',
+    ],
+  };
+}
+
+function toOpenAIInput(messages, latestMessage, tools = {}, intent = 'geral') {
   const recent = (messages || []).slice(-8).map((message) => ({
     role: message.role === 'assistant' ? 'assistant' : 'user',
     content: message.content || message.text || '',
@@ -248,67 +234,33 @@ function toOpenAIInput(messages, latestMessage, tools = {}) {
     {
       role: 'user',
       content: [
-        `Mensagem atual: ${latestMessage}`,
+        'Contexto estruturado da Voya para esta rodada:',
+        JSON.stringify(buildStructuredContext({ intent, latestMessage, tools })),
         Object.keys(tools).length
-          ? `Dados de ferramentas acionadas nesta rodada: ${JSON.stringify(tools)}`
-          : 'Se a mensagem pedir hotel, voo ou roteiro, chame a ferramenta adequada antes de responder.',
+          ? 'A ferramenta já foi executada pelo backend antes desta resposta. Não invente dados fora desse contexto.'
+          : 'Nenhuma ferramenta foi necessária nesta rodada. Responda de forma curta e peça o menor detalhe útil.',
       ].join('\n\n'),
     },
   ];
 }
 
-async function callOpenAI({ env, message, messages, tools }) {
+async function callOpenAI({ env, message, messages, tools, intent }) {
   const client = new OpenAI({ apiKey: env.OPENAI_API_KEY });
-  const input = toOpenAIInput(messages, message, tools);
+  const input = toOpenAIInput(messages, message, tools, intent);
   const response = await client.responses.create({
     model: env.OPENAI_MODEL || 'gpt-5.5',
-    instructions,
+    instructions: [
+      instructions,
+      'Nesta chamada, as ferramentas já foram executadas de forma determinística pelo backend.',
+      'Use somente o contexto estruturado recebido em toolResults.',
+      'Se detectedIntent for hotel, não crie roteiro e não dê resposta genérica: recomende os hotéis retornados.',
+    ].join('\n\n'),
     input,
-    tools: OPENAI_AGENT_TOOLS,
-    tool_choice: getOpenAIToolChoice(message),
-    max_output_tokens: 450,
-  });
-
-  const toolCalls = (response.output || []).filter((item) => item.type === 'function_call');
-  if (!toolCalls.length) {
-    return {
-      reply: response.output_text || response.output?.flatMap((item) => item.content || []).map((part) => part.text).filter(Boolean).join('\n') || '',
-      tools: {},
-      toolCalls: [],
-    };
-  }
-
-  const toolEntries = await Promise.all(toolCalls.map((call) => executeOpenAIToolCall(call, env, message)));
-  const toolResults = Object.fromEntries(toolEntries);
-  const toolOutputs = toolCalls.map((call, index) => ({
-    type: 'function_call_output',
-    call_id: call.call_id,
-    output: JSON.stringify(toolEntries[index][1]),
-  }));
-
-  const finalResponse = await client.responses.create({
-    model: env.OPENAI_MODEL || 'gpt-5.5',
-    instructions,
-    input: [
-      ...input,
-      ...response.output,
-      ...toolOutputs,
-      {
-        role: 'user',
-        content: [
-          'Responda agora usando obrigatoriamente os dados retornados pela ferramenta.',
-          'Se a ferramenta retornou status live, recomende apenas hotéis reais retornados.',
-          'Se retornou erro, explique o erro sem inventar opções.',
-        ].join('\n'),
-      },
-    ],
     max_output_tokens: 550,
   });
 
   return {
-    reply: finalResponse.output_text || finalResponse.output?.flatMap((item) => item.content || []).map((part) => part.text).filter(Boolean).join('\n') || '',
-    tools: toolResults,
-    toolCalls: toolCalls.map((call) => ({ name: call.name, call_id: call.call_id })),
+    reply: response.output_text || response.output?.flatMap((item) => item.content || []).map((part) => part.text).filter(Boolean).join('\n') || '',
   };
 }
 
@@ -357,12 +309,25 @@ export function createChatHandler(env = process.env) {
       let reply = '';
       let source = 'mock';
       let toolCalls = [];
+      const intent = detectIntent(message);
+      const deterministicResult = await runDeterministicTools({ intent, env, message });
+      tools = deterministicResult.tools;
+      toolCalls = deterministicResult.toolCalls;
+
+      if (intent === 'hotel' && isHotelToolFailure(tools.buscarHoteis)) {
+        sendJson(res, 200, {
+          reply: fallbackReply(message, tools),
+          source: 'tool-error',
+          intent,
+          tools,
+          toolCalls,
+        });
+        return;
+      }
 
       if (env.OPENAI_API_KEY) {
-        const openAIResult = await callOpenAI({ env, message, messages, tools });
+        const openAIResult = await callOpenAI({ env, message, messages, tools, intent });
         reply = openAIResult.reply;
-        tools = openAIResult.tools;
-        toolCalls = openAIResult.toolCalls;
         source = 'openai';
       }
 
@@ -371,7 +336,7 @@ export function createChatHandler(env = process.env) {
         reply = fallbackReply(message, tools);
       }
 
-      sendJson(res, 200, { reply, source, tools, toolCalls });
+      sendJson(res, 200, { reply, source, intent, tools, toolCalls });
     } catch (error) {
       console.error('[Voya /api/chat] OpenAI request failed', error);
       const debugError = serializeError(error);
