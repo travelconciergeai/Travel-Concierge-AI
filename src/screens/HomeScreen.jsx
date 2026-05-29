@@ -18,6 +18,11 @@ import { GuidedTravelWizard } from "../components/GuidedTravelWizard.jsx";
 
 const FINAL_ERROR_SOURCES = ['tool-error', 'real-error', 'real-unavailable', 'client-fallback'];
 
+function getLiveHotelSearch(response) {
+  const result = response.hotelSearch || response.tools?.buscarHoteis;
+  return result?.status === 'live' && result.options?.length ? result : null;
+}
+
 const HomeScreen = ({ setRoute, kickoffPlan, setActiveTripId }) => {
   const [input, setInput] = useState('');
   const [thinking, setThinking] = useState(false);
@@ -69,6 +74,13 @@ const HomeScreen = ({ setRoute, kickoffPlan, setActiveTripId }) => {
         message: t,
         messages: nextChat.map(m => ({ role: m.who === 'agent' ? 'assistant' : 'user', content: m.text || '' })),
       }).then((response) => {
+        const hotelSearch = getLiveHotelSearch(response);
+        if (hotelSearch) {
+          saveHotelSearchResults(hotelSearch.options, {
+            status: hotelSearch.status,
+            query: hotelSearch.query,
+          });
+        }
         setChat(c => [...c, { id: `a-${Date.now()}`, who: 'agent', text: response.reply, guidedPaths: response.guidedPaths }]);
       }).catch((error) => {
         setChat(c => [...c, { id: `a-${Date.now()}`, who: 'agent', text: `Não consegui consultar dados reais agora: ${error.message}` }]);
@@ -107,17 +119,22 @@ const HomeScreen = ({ setRoute, kickoffPlan, setActiveTripId }) => {
       message: t,
       messages: nextChat.map(m => ({ role: m.who === 'agent' ? 'assistant' : 'user', content: m.text || '' })),
     });
-    if (response.tools?.buscarHoteis?.options?.length) {
-      saveHotelSearchResults(response.tools.buscarHoteis.options, {
-        status: response.tools.buscarHoteis.status,
-        query: response.tools.buscarHoteis.query,
+    const hotelSearch = getLiveHotelSearch(response);
+    if (hotelSearch) {
+      saveHotelSearchResults(hotelSearch.options, {
+        status: hotelSearch.status,
+        query: hotelSearch.query,
       });
     }
     if (response.tools?.buscarVoos?.options?.length) {
       saveFlightSearchResults(response.tools.buscarVoos.options, { status: response.tools.buscarVoos.status });
     }
     return {
-      text: response.reply || 'Não consegui acessar dados reais agora. Prefiro não te mostrar informações imprecisas. Tenta novamente daqui a pouquinho.',
+      kind: hotelSearch ? 'hotels' : null,
+      count: hotelSearch?.options?.length || 0,
+      text: hotelSearch
+        ? `${hotelSearch.options.length} hotéis reais foram carregados nos cards de Hotéis. Abra os cards para reservar ou aplicar um hotel ao roteiro.`
+        : response.reply || 'Não consegui acessar dados reais agora. Prefiro não te mostrar informações imprecisas. Tenta novamente daqui a pouquinho.',
       error: FINAL_ERROR_SOURCES.includes(response.source),
     };
   };
@@ -199,6 +216,7 @@ const HomeScreen = ({ setRoute, kickoffPlan, setActiveTripId }) => {
               <ChatMsg key={m.id || i} m={m}
                 onAnswer={realMode ? undefined : answerWizard}
                 onGuided={completeGuidedFlow}
+                onViewResults={(route) => setRoute(route)}
                 onGenDone={onGenerationDone}/>
             ))}
             {thinking && (
@@ -396,7 +414,7 @@ const HomeScreen = ({ setRoute, kickoffPlan, setActiveTripId }) => {
 
 // ============ Chat message renderer ============
 // Switches between user bubbles, plain agent text, inline wizard, and inline gen card.
-const ChatMsg = ({ m, onAnswer, onGuided, onGenDone }) => {
+const ChatMsg = ({ m, onAnswer, onGuided, onViewResults, onGenDone }) => {
   if (m.who === 'user') {
     return (
       <div className="flex justify-end">
@@ -439,7 +457,7 @@ const ChatMsg = ({ m, onAnswer, onGuided, onGenDone }) => {
       <div className="text-[14.5px] text-ink-900 leading-relaxed">
         {m.text}
       </div>
-      {m.guidedPaths && <GuidedTravelWizard paths={m.guidedPaths} onComplete={onGuided} />}
+      {m.guidedPaths && <GuidedTravelWizard paths={m.guidedPaths} onComplete={onGuided} onViewResults={onViewResults} />}
     </div>
   );
 };

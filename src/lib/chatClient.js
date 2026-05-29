@@ -62,6 +62,56 @@ function getMissingForIntent(intent, text) {
   return [];
 }
 
+function extractGuidedContext(text = '', intent = 'geral') {
+  const destinationMap = [
+    ['lisboa', 'Lisboa'],
+    ['lisbon', 'Lisboa'],
+    ['orlando', 'Orlando Disney'],
+    ['disney', 'Orlando Disney'],
+    ['paris', 'Paris'],
+    ['porto', 'Porto'],
+    ['roma', 'Roma'],
+    ['londres', 'Londres'],
+    ['madrid', 'Madrid'],
+    ['miami', 'Miami'],
+  ];
+  const destination = destinationMap.find(([key]) => text.includes(key))?.[1] || '';
+  const family = /(familia|crianca|filho|filha)/i.test(text);
+  const couple = /(casal|marido|esposa|romantico|lua de mel)/i.test(text);
+  const boutique = /boutique/i.test(text);
+  const romantic = /(romantico|lua de mel|casal|marido|esposa)/i.test(text);
+  const disney = /(disney|orlando|parque)/i.test(text);
+  const budget = /(econom|barato|custo-beneficio)/i.test(text)
+    ? 'custo-benefício'
+    : /(luxo|premium|conforto)/i.test(text)
+      ? 'premium consciente'
+      : '';
+
+  return {
+    intent,
+    destination,
+    travelers: family ? 'família com crianças' : couple ? 'casal' : '',
+    profile: family ? 'família' : couple ? 'casal' : disney ? 'Disney' : '',
+    dates: hasDates(text) ? 'datas flexíveis' : '',
+    style: [
+      boutique && 'boutique',
+      romantic && 'romântico',
+      family && 'conforto para família',
+      disney && 'Disney com descanso',
+    ].filter(Boolean).join(' ') || '',
+    accommodationStyle: boutique ? 'hotel boutique' : family ? 'hotel prático para família' : '',
+    tripPurpose: romantic ? 'viagem a dois' : family ? 'viagem em família' : disney ? 'Disney' : '',
+    budget,
+    priorities: [
+      romantic && 'localização charmosa',
+      family && 'menos deslocamento',
+      disney && 'proximidade dos parques',
+      boutique && 'atmosfera boutique',
+    ].filter(Boolean),
+    originalMessage: text,
+  };
+}
+
 function buildLocalGuidedResponse(message, messages = []) {
   const text = normalizeText([
     ...messages.map((item) => item.content || item.text || ''),
@@ -83,6 +133,7 @@ function buildLocalGuidedResponse(message, messages = []) {
     guidedPaths: {
       kind: intent,
       missing,
+      context: extractGuidedContext(text, intent),
       title: 'Vamos calibrar antes de buscar',
       subtitle: 'Escolha uma opção ou escreva com suas palavras.',
       options: [],
@@ -119,6 +170,7 @@ export async function sendChatMessage({ message, messages = [] }) {
       reply: data.reply || clientFallback(message),
       source: data.source || 'unknown',
       tools: data.tools || {},
+      hotelSearch: data.tools?.buscarHoteis || data.hotelSearch || null,
       toolCalls: data.toolCalls || [],
       guidedPaths: data.guidedPaths || null,
     };

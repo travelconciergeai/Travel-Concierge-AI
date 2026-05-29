@@ -139,8 +139,60 @@ function option(id, label, hint, icon = 'Sparkles', value = label) {
   return { id, label, hint, icon, value };
 }
 
-function buildGuidedPaths(intent, missing = []) {
+function extractGuidedContext(text = '', intent = 'geral') {
+  const normalized = normalizeText(text);
+  const destinationMap = [
+    ['lisboa', 'Lisboa'],
+    ['lisbon', 'Lisboa'],
+    ['orlando', 'Orlando Disney'],
+    ['disney', 'Orlando Disney'],
+    ['paris', 'Paris'],
+    ['porto', 'Porto'],
+    ['roma', 'Roma'],
+    ['londres', 'Londres'],
+    ['madrid', 'Madrid'],
+    ['miami', 'Miami'],
+  ];
+  const destination = destinationMap.find(([key]) => normalized.includes(key))?.[1] || '';
+  const family = /(familia|crianca|filho|filha)/i.test(normalized);
+  const couple = /(casal|marido|esposa|romantico|lua de mel)/i.test(normalized);
+  const boutique = /boutique/i.test(normalized);
+  const romantic = /(romantico|lua de mel|casal|marido|esposa)/i.test(normalized);
+  const disney = /(disney|orlando|parque)/i.test(normalized);
+  const budget = /(econom|barato|custo-beneficio)/i.test(normalized)
+    ? 'custo-benefício'
+    : /(luxo|premium|conforto)/i.test(normalized)
+      ? 'premium consciente'
+      : '';
+
+  return {
+    intent,
+    destination,
+    travelers: family ? 'família com crianças' : couple ? 'casal' : '',
+    profile: family ? 'família' : couple ? 'casal' : disney ? 'Disney' : '',
+    dates: hasDatesOrFlex(text) ? 'datas flexíveis' : '',
+    style: [
+      boutique && 'boutique',
+      romantic && 'romântico',
+      family && 'conforto para família',
+      disney && 'Disney com descanso',
+    ].filter(Boolean).join(' ') || '',
+    accommodationStyle: boutique ? 'hotel boutique' : family ? 'hotel prático para família' : '',
+    tripPurpose: romantic ? 'viagem a dois' : family ? 'viagem em família' : disney ? 'Disney' : '',
+    budget,
+    priorities: [
+      romantic && 'localização charmosa',
+      family && 'menos deslocamento',
+      disney && 'proximidade dos parques',
+      boutique && 'atmosfera boutique',
+    ].filter(Boolean),
+    originalMessage: text,
+  };
+}
+
+function buildGuidedPaths(intent, missing = [], conversationText = '') {
   const first = missing[0];
+  const context = extractGuidedContext(conversationText, intent);
   const common = {
     destino: [
       option('dest-lisboa', 'Lisboa', 'Cidade, bairros caminháveis e boa gastronomia', 'MapPin', 'Destino: Lisboa'),
@@ -204,6 +256,7 @@ function buildGuidedPaths(intent, missing = []) {
   return {
     kind: intent,
     missing,
+    context,
     title: first ? 'Vamos calibrar antes de buscar' : 'Pronto para consultar',
     subtitle: first ? 'Escolha uma opção ou escreva com suas palavras.' : 'Já tenho o mínimo para avançar.',
     options,
@@ -213,7 +266,7 @@ function buildGuidedPaths(intent, missing = []) {
 function shouldGuideIntent(intent, conversationText) {
   const missing = getMissingContext(intent, conversationText);
   return ['hotel', 'voo', 'roteiro', 'recomendacao'].includes(intent) && missing.length > 0
-    ? { missing, guidedPaths: buildGuidedPaths(intent, missing) }
+    ? { missing, guidedPaths: buildGuidedPaths(intent, missing, conversationText) }
     : null;
 }
 

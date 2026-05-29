@@ -27,6 +27,11 @@ const emptyRealTrip = {
 };
 const FINAL_ERROR_SOURCES = ['tool-error', 'real-error', 'real-unavailable', 'client-fallback'];
 
+function getLiveHotelSearch(response) {
+  const result = response.hotelSearch || response.tools?.buscarHoteis;
+  return result?.status === 'live' && result.options?.length ? result : null;
+}
+
 const PlanScreen = ({ kickoff, clearKickoff, setRoute, trip }) => {
   const toast = useToast();
   const realMode = isRealDataMode();
@@ -84,10 +89,11 @@ const PlanScreen = ({ kickoff, clearKickoff, setRoute, trip }) => {
   }, [kickoff]);
 
   const applyResponseEffects = (text, response) => {
-    if (response.tools?.buscarHoteis?.options?.length) {
-      saveHotelSearchResults(response.tools.buscarHoteis.options, {
-        status: response.tools.buscarHoteis.status,
-        query: response.tools.buscarHoteis.query,
+    const hotelSearch = getLiveHotelSearch(response);
+    if (hotelSearch) {
+      saveHotelSearchResults(hotelSearch.options, {
+        status: hotelSearch.status,
+        query: hotelSearch.query,
       });
     }
     if (response.tools?.buscarVoos?.options?.length) {
@@ -114,8 +120,13 @@ const PlanScreen = ({ kickoff, clearKickoff, setRoute, trip }) => {
     });
     applyResponseEffects(t, response);
     const hasFinalError = FINAL_ERROR_SOURCES.includes(response.source);
+    const hotelSearch = getLiveHotelSearch(response);
     return {
-      text: response.reply || (hasFinalError
+      kind: hotelSearch ? 'hotels' : null,
+      count: hotelSearch?.options?.length || 0,
+      text: hotelSearch
+        ? `${hotelSearch.options.length} hotéis reais foram carregados nos cards de Hotéis. Abra os cards para reservar ou aplicar um hotel ao roteiro.`
+        : response.reply || (hasFinalError
         ? 'Não consegui acessar dados reais agora. Prefiro não te mostrar informações imprecisas. Tenta novamente daqui a pouquinho.'
         : planChatFallbackReply(t)),
       error: hasFinalError,
@@ -183,7 +194,7 @@ const PlanScreen = ({ kickoff, clearKickoff, setRoute, trip }) => {
         </header>
 
         <div ref={chatEndRef} className="flex-1 overflow-y-auto px-7 py-5 space-y-4">
-          {chat.map((m, i) => <Bubble key={i} m={m} onCta={(t) => send(t)} onGuidedComplete={completeGuidedFlow} />)}
+          {chat.map((m, i) => <Bubble key={i} m={m} onCta={(t) => send(t)} onGuidedComplete={completeGuidedFlow} onViewResults={(route) => setRoute(route)} />)}
           {typing && (
             <div className="flex gap-1 pt-2">
               <span className="dot h-1.5 w-1.5 rounded-full bg-ink-400"/>
@@ -272,7 +283,7 @@ const PlanScreen = ({ kickoff, clearKickoff, setRoute, trip }) => {
 };
 
 // ---------- Chat bubble ----------
-const Bubble = ({ m, onCta, onGuidedComplete }) => {
+const Bubble = ({ m, onCta, onGuidedComplete, onViewResults }) => {
   if (m.who === 'user') {
     return (
       <div className="flex justify-end">
@@ -298,7 +309,7 @@ const Bubble = ({ m, onCta, onGuidedComplete }) => {
         </div>
       )}
       {m.guidedPaths && (
-        <GuidedTravelWizard paths={m.guidedPaths} onComplete={onGuidedComplete} />
+        <GuidedTravelWizard paths={m.guidedPaths} onComplete={onGuidedComplete} onViewResults={onViewResults} />
       )}
     </div>
   );
