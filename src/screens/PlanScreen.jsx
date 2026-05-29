@@ -138,6 +138,8 @@ const PlanScreen = ({ kickoff, clearKickoff, setRoute, trip }) => {
     const hasFinalError = FINAL_ERROR_SOURCES.includes(response.source);
     const hotelSearch = getLiveHotelSearch(response);
     return {
+      source: response.source,
+      guidedPaths: response.guidedPaths,
       kind: hotelSearch ? 'hotels' : null,
       count: hotelSearch?.options?.length || 0,
       hotels: mappedLiveHotels(hotelSearch),

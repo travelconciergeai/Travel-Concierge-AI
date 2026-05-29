@@ -251,6 +251,19 @@ function firstOpenStep(steps, context, fromIndex = 0) {
   return index >= 0 ? index : steps.length - 1;
 }
 
+function stepIdForMissingField(field) {
+  return {
+    destino: 'destination',
+    datas: 'dates',
+    duração: 'dates',
+    viajantes: 'travelers',
+    passageiros: 'travelers',
+    perfil: 'travelers',
+    estilo: 'style',
+    orçamento: 'budget',
+  }[field] || null;
+}
+
 const OptionButton = ({ option, onClick }) => {
   const Ic = Icon[option.icon] || Icon.Sparkles;
   return (
@@ -352,6 +365,17 @@ export const GuidedTravelWizard = ({ paths, onComplete, onViewResults }) => {
     });
     try {
       const response = await onComplete(buildFinalMessage(context));
+      if (response?.source === 'guided' || response?.guidedPaths) {
+        const guidedContext = response.guidedPaths?.context || {};
+        const nextContext = { ...context, ...guidedContext };
+        const nextSteps = getSteps(nextContext.need || initialNeed, nextContext);
+        const missingStepId = stepIdForMissingField(response.guidedPaths?.missing?.[0]);
+        const missingStepIndex = nextSteps.findIndex((item) => item.id === missingStepId);
+        setContext(nextContext);
+        setResult(null);
+        setStepIdx(missingStepIndex >= 0 ? missingStepIndex : firstOpenStep(nextSteps, nextContext));
+        return;
+      }
       setResult({
         error: Boolean(response?.error),
         kind: response?.kind || null,

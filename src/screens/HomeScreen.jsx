@@ -140,6 +140,8 @@ const HomeScreen = ({ setRoute, kickoffPlan, setActiveTripId }) => {
       saveFlightSearchResults(response.tools.buscarVoos.options, { status: response.tools.buscarVoos.status });
     }
     return {
+      source: response.source,
+      guidedPaths: response.guidedPaths,
       kind: hotelSearch ? 'hotels' : null,
       count: hotelSearch?.options?.length || 0,
       hotels: mappedLiveHotels(hotelSearch),
