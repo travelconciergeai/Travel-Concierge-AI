@@ -85,15 +85,58 @@ function buildConversationText(messages = [], message = '', activeTripContext = 
   ].filter(Boolean).join('\n');
 }
 
-function hasDestination(text) {
+function extractDatePhrase(text = '') {
   const normalized = normalizeText(text);
-  return /(lisboa|lisbon|paris|orlando|disney|porto|roma|londres|madrid|tokyo|toquio|nova york|miami)/i.test(normalized)
+  const original = String(text);
+  const rangeWithMonth = original.match(/\b(?:de\s*)?(\d{1,2})\s*(?:a|até|-)\s*(\d{1,2})\s*de\s*(janeiro|fevereiro|mar[cç]o|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro)\b/i);
+  if (rangeWithMonth) return `${rangeWithMonth[1]} a ${rangeWithMonth[2]} de ${rangeWithMonth[3].toLowerCase()}`;
+  const monthOnly = normalized.match(/\bem\s+(janeiro|fevereiro|marco|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro)\b/);
+  if (monthOnly) return `em ${monthOnly[1]}`;
+  if (/semana que vem/.test(normalized)) return 'semana que vem';
+  if (/datas flexiveis|datas abertas|flexivel|flexiveis/.test(normalized)) return 'datas flexíveis';
+  const slashRange = original.match(/\b(\d{1,2}\/\d{1,2})(?:\s*(?:a|até|-)\s*(\d{1,2}\/\d{1,2}))?\b/i);
+  if (slashRange) return slashRange[2] ? `${slashRange[1]} a ${slashRange[2]}` : slashRange[1];
+  return '';
+}
+
+function extractDestinationPhrase(text = '') {
+  const original = String(text);
+  const normalized = normalizeText(original);
+  const known = [
+    ['buenos aires', 'Buenos Aires'],
+    ['lisboa', 'Lisboa'],
+    ['lisbon', 'Lisboa'],
+    ['orlando', 'Orlando Disney'],
+    ['disney', 'Orlando Disney'],
+    ['paris', 'Paris'],
+    ['porto', 'Porto'],
+    ['roma', 'Roma'],
+    ['japao', 'Japão'],
+    ['japão', 'Japão'],
+    ['portugal', 'Portugal'],
+    ['londres', 'Londres'],
+    ['madrid', 'Madrid'],
+    ['miami', 'Miami'],
+  ];
+  const found = known.find(([key]) => normalized.includes(key));
+  if (found) return found[1];
+
+  const destinationMatch = original.match(/\b(?:em|para|pra|no|na|nos|nas)\s+([A-Za-zÀ-ÿ]+(?:\s+(?!para\b|com\b|vamos\b|vou\b|ficar\b|de\b|do\b|da\b|dos\b|das\b|em\b)[A-Za-zÀ-ÿ]+){0,3})/i);
+  if (!destinationMatch) return '';
+  const stopWords = /^(hotel|hoteis|hotéis|casal|familia|família|setembro|janeiro|fevereiro|março|marco|abril|maio|junho|julho|agosto|outubro|novembro|dezembro)$/i;
+  const value = destinationMatch[1].trim().replace(/[,.!?]+$/, '');
+  if (!value || stopWords.test(value)) return '';
+  return value.split(/\s+/).map((word) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase()).join(' ');
+}
+
+function hasDestination(text) {
+  return Boolean(extractDestinationPhrase(text))
     || /\b(destino|cidade)\s*:\s*\S+/i.test(text);
 }
 
 function hasDatesOrFlex(text) {
-  const normalized = normalizeText(text);
-  return /(flexivel|flexiveis|sem data|datas abertas|qualquer data|janeiro|fevereiro|marco|abril|maio|junho|julho|agosto|setembro|outubro|novembro|dezembro|\d{1,2}\/\d{1,2}|\d{4}-\d{2}-\d{2}|\b\d+\s*(dias|noites)\b)/i.test(normalized);
+  return Boolean(extractDatePhrase(text))
+    || /(\d{4}-\d{2}-\d{2}|\b\d+\s*(dias|noites)\b)/i.test(normalizeText(text));
 }
 
 function hasTravelers(text) {
@@ -160,23 +203,13 @@ function option(id, label, hint, icon = 'Sparkles', value = label) {
 
 function extractGuidedContext(text = '', intent = 'geral') {
   const normalized = normalizeText(text);
-  const destinationMap = [
-    ['lisboa', 'Lisboa'],
-    ['lisbon', 'Lisboa'],
-    ['orlando', 'Orlando Disney'],
-    ['disney', 'Orlando Disney'],
-    ['paris', 'Paris'],
-    ['porto', 'Porto'],
-    ['roma', 'Roma'],
-    ['londres', 'Londres'],
-    ['madrid', 'Madrid'],
-    ['miami', 'Miami'],
-  ];
-  const destination = destinationMap.find(([key]) => normalized.includes(key))?.[1] || '';
+  const destination = extractDestinationPhrase(text);
+  const dates = extractDatePhrase(text);
   const family = /(familia|crianca|filho|filha)/i.test(normalized);
-  const couple = /(casal|marido|esposa|romantico|lua de mel)/i.test(normalized);
+  const couple = /(casal|marido|esposa|romantico|lua de mel|para casal)/i.test(normalized);
   const boutique = /boutique/i.test(normalized);
-  const romantic = /(romantico|lua de mel|casal|marido|esposa)/i.test(normalized);
+  const romantic = /(romantico|lua de mel)/i.test(normalized);
+  const romanticProfile = romantic || /(casal|marido|esposa)/i.test(normalized);
   const disney = /(disney|orlando|parque)/i.test(normalized);
   const budget = /(econom|barato|custo-beneficio)/i.test(normalized)
     ? 'custo-benefício'
@@ -189,7 +222,8 @@ function extractGuidedContext(text = '', intent = 'geral') {
     destination,
     travelers: family ? 'família com crianças' : couple ? 'casal' : '',
     profile: family ? 'família' : couple ? 'casal' : disney ? 'Disney' : '',
-    dates: hasDatesOrFlex(text) ? 'datas flexíveis' : '',
+    dates,
+    flexibility: dates === 'datas flexíveis' ? 'flexível' : false,
     style: [
       boutique && 'boutique',
       romantic && 'romântico',
@@ -197,10 +231,10 @@ function extractGuidedContext(text = '', intent = 'geral') {
       disney && 'Disney com descanso',
     ].filter(Boolean).join(' ') || '',
     accommodationStyle: boutique ? 'hotel boutique' : family ? 'hotel prático para família' : '',
-    tripPurpose: romantic ? 'viagem a dois' : family ? 'viagem em família' : disney ? 'Disney' : '',
+    tripPurpose: romanticProfile ? 'viagem a dois' : family ? 'viagem em família' : disney ? 'Disney' : '',
     budget,
     priorities: [
-      romantic && 'localização charmosa',
+      romanticProfile && 'localização charmosa',
       family && 'menos deslocamento',
       disney && 'proximidade dos parques',
       boutique && 'atmosfera boutique',
