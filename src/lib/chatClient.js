@@ -148,6 +148,55 @@ function extractGuidedContext(text = '', intent = 'geral') {
   };
 }
 
+function hasContextValue(value) {
+  if (Array.isArray(value)) return value.length > 0;
+  return Boolean(String(value || '').trim());
+}
+
+function getMissingForExtractedContext(intent, text, context = extractGuidedContext(text, intent)) {
+  if (intent === 'hotel') {
+    return [
+      !hasContextValue(context.destination) && !hasDestination(text) && 'destino',
+      !hasContextValue(context.dates) && !hasDates(text) && 'datas',
+      !hasContextValue(context.travelers || context.profile) && !hasTravelers(text) && 'viajantes',
+      !hasContextValue(context.style || context.accommodationStyle || context.budget) && !hasStyle(text) && 'estilo',
+    ].filter(Boolean);
+  }
+  if (intent === 'voo') {
+    return [
+      !hasOrigin(text) && 'origem',
+      !hasContextValue(context.destination) && !hasDestination(text) && 'destino',
+      !hasContextValue(context.dates) && !hasDates(text) && 'datas',
+      !hasContextValue(context.travelers || context.profile) && !hasTravelers(text) && 'passageiros',
+    ].filter(Boolean);
+  }
+  if (intent === 'roteiro') {
+    return [
+      !hasContextValue(context.destination) && !hasDestination(text) && 'destino',
+      !hasContextValue(context.dates) && !hasDates(text) && 'duração',
+      !hasContextValue(context.travelers || context.profile || context.tripPurpose) && !hasTravelers(text) && 'perfil',
+      !hasContextValue(context.budget || context.style) && !hasStyle(text) && 'orçamento',
+    ].filter(Boolean);
+  }
+  return [];
+}
+
+function guidedReplyForMissing(field, context = {}) {
+  const destination = context.destination ? ` para ${context.destination}` : '';
+  const replies = {
+    destino: 'Claro. Antes de buscar, preciso entender o destino para não te trazer opções soltas.',
+    datas: `Perfeito. Para buscar com precisão${destination}, quais datas ou janela você imagina?`,
+    viajantes: 'Perfeito. Quem vai viajar?',
+    passageiros: 'Perfeito. Quem vai voar?',
+    estilo: 'Perfeito. Qual estilo de hospedagem devo priorizar?',
+    origem: 'Perfeito. De qual cidade você sairá?',
+    duração: `Perfeito. Quantos dias você imagina${destination}?`,
+    perfil: 'Perfeito. Quem vai viajar e qual é o perfil da viagem?',
+    orçamento: 'Perfeito. Qual prioridade devo respeitar: custo-benefício, conforto ou premium consciente?',
+  };
+  return replies[field] || 'Perfeito. Só preciso de mais um detalhe para seguir.';
+}
+
 function buildLocalGuidedResponse(message, messages = []) {
   const activeContext = getActiveTripContext();
   const text = normalizeText([
@@ -158,20 +207,19 @@ function buildLocalGuidedResponse(message, messages = []) {
   const intent = detectGuidedIntent(text);
   if (!intent) return null;
 
-  const missing = getMissingForIntent(intent, text);
+  const context = { ...activeContext, ...extractGuidedContext(text, intent) };
+  const missing = getMissingForExtractedContext(intent, text, context);
   if (!missing.length) return null;
 
   return {
-    reply: missing[0] === 'destino'
-      ? 'Claro. Antes de buscar, preciso entender o destino para não te trazer opções soltas.'
-      : 'Perfeito. Só preciso fechar mais um detalhe para buscar com precisão.',
+    reply: guidedReplyForMissing(missing[0], context),
     source: 'guided',
     tools: {},
     toolCalls: [],
     guidedPaths: {
       kind: intent,
       missing,
-      context: { ...activeContext, ...extractGuidedContext(text, intent) },
+      context,
       title: 'Vamos calibrar antes de buscar',
       subtitle: 'Escolha uma opção ou escreva com suas palavras.',
       options: [],

@@ -243,9 +243,58 @@ function extractGuidedContext(text = '', intent = 'geral') {
   };
 }
 
-function buildGuidedPaths(intent, missing = [], conversationText = '') {
+function hasContextValue(value) {
+  if (Array.isArray(value)) return value.length > 0;
+  return Boolean(String(value || '').trim());
+}
+
+function getMissingContextFromExtracted(intent, text, context = extractGuidedContext(text, intent)) {
+  if (intent === 'hotel') {
+    return [
+      !hasContextValue(context.destination) && !hasDestination(text) && 'destino',
+      !hasContextValue(context.dates) && !hasDatesOrFlex(text) && 'datas',
+      !hasContextValue(context.travelers || context.profile) && !hasTravelers(text) && 'viajantes',
+      !hasContextValue(context.style || context.accommodationStyle || context.budget) && !hasHotelStyle(text) && 'estilo',
+    ].filter(Boolean);
+  }
+  if (intent === 'voo') {
+    return [
+      !hasOrigin(text) && 'origem',
+      !hasContextValue(context.destination) && !hasDestination(text) && 'destino',
+      !hasContextValue(context.dates) && !hasDatesOrFlex(text) && 'datas',
+      !hasContextValue(context.travelers || context.profile) && !hasTravelers(text) && 'passageiros',
+    ].filter(Boolean);
+  }
+  if (intent === 'roteiro' || intent === 'recomendacao') {
+    return [
+      !hasContextValue(context.destination) && !hasDestination(text) && 'destino',
+      !hasContextValue(context.dates) && !hasDuration(text) && 'duração',
+      !hasContextValue(context.travelers || context.profile || context.tripPurpose) && !hasTripProfile(text) && 'perfil',
+      !hasContextValue(context.budget || context.style) && !hasBudgetOrStyle(text) && 'orçamento',
+    ].filter(Boolean);
+  }
+  return [];
+}
+
+function guidedReplyForMissing(field, context = {}) {
+  const destination = context.destination ? ` para ${context.destination}` : '';
+  const replies = {
+    destino: 'Claro. Antes de buscar, preciso entender o destino para não te trazer opções soltas.',
+    datas: `Perfeito. Para buscar com precisão${destination}, quais datas ou janela você imagina?`,
+    viajantes: 'Perfeito. Quem vai viajar?',
+    passageiros: 'Perfeito. Quem vai voar?',
+    estilo: 'Perfeito. Qual estilo de hospedagem devo priorizar?',
+    origem: 'Perfeito. De qual cidade você sairá?',
+    duração: `Perfeito. Quantos dias você imagina${destination}?`,
+    perfil: 'Perfeito. Quem vai viajar e qual é o perfil da viagem?',
+    orçamento: 'Perfeito. Qual prioridade devo respeitar: custo-benefício, conforto ou premium consciente?',
+  };
+  return replies[field] || 'Perfeito. Só preciso de mais um detalhe para seguir.';
+}
+
+function buildGuidedPaths(intent, missing = [], conversationText = '', extractedContext = null) {
   const first = missing[0];
-  const context = extractGuidedContext(conversationText, intent);
+  const context = extractedContext || extractGuidedContext(conversationText, intent);
   const common = {
     destino: [
       option('dest-lisboa', 'Lisboa', 'Cidade, bairros caminháveis e boa gastronomia', 'MapPin', 'Destino: Lisboa'),
@@ -317,9 +366,10 @@ function buildGuidedPaths(intent, missing = [], conversationText = '') {
 }
 
 function shouldGuideIntent(intent, conversationText) {
-  const missing = getMissingContext(intent, conversationText);
+  const context = extractGuidedContext(conversationText, intent);
+  const missing = getMissingContextFromExtracted(intent, conversationText, context);
   return ['hotel', 'voo', 'roteiro', 'recomendacao'].includes(intent) && missing.length > 0
-    ? { missing, guidedPaths: buildGuidedPaths(intent, missing, conversationText) }
+    ? { missing, guidedPaths: buildGuidedPaths(intent, missing, conversationText, context) }
     : null;
 }
 
@@ -648,9 +698,7 @@ export function createChatHandler(env = process.env) {
 
       if (guided) {
         sendJson(res, 200, {
-          reply: guided.missing[0] === 'destino'
-            ? 'Claro. Antes de buscar, preciso entender o destino para não te trazer opções soltas.'
-            : 'Perfeito. Só preciso fechar mais um detalhe para buscar com precisão.',
+          reply: guidedReplyForMissing(guided.missing[0], guided.guidedPaths.context),
           source: 'guided',
           intent,
           dataMode: realMode ? 'real' : 'mock',
