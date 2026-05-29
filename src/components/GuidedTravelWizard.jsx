@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Icon } from '../icons.jsx';
+import { getActiveTripContext, mergeActiveTripContext, updateActiveContextFromHotel } from '../lib/activeTripContext.js';
+import { applyHotelToProgressiveTrip } from '../lib/tripDraftState.js';
 
 const needs = [
   { id: 'hotel', label: 'Ver hotéis', hint: 'Hospedagem com contexto certo', icon: 'Bed' },
@@ -224,17 +226,18 @@ function buildFinalMessage(context) {
 }
 
 function buildInitialContext(paths, initialNeed) {
+  const activeContext = getActiveTripContext();
   const source = paths?.context || {};
   return {
     need: inferNeed(source.intent) || initialNeed,
-    destination: source.destination || '',
-    dates: source.dates || '',
-    travelers: source.travelers || source.profile || '',
-    style: source.style || source.accommodationStyle || '',
-    budget: source.budget || '',
+    destination: source.destination || activeContext.destination || activeContext.city || '',
+    dates: source.dates || activeContext.dates || activeContext.flexibility || '',
+    travelers: source.travelers || source.profile || activeContext.travelers || '',
+    style: source.style || source.accommodationStyle || activeContext.tripStyle || activeContext.accommodationStyle || '',
+    budget: source.budget || activeContext.budget || activeContext.priority || '',
     priorities: source.priorities || [],
-    tripPurpose: source.tripPurpose || '',
-    accommodationStyle: source.accommodationStyle || '',
+    tripPurpose: source.tripPurpose || activeContext.purpose || '',
+    accommodationStyle: source.accommodationStyle || activeContext.accommodationStyle || '',
   };
 }
 
@@ -310,6 +313,16 @@ export const GuidedTravelWizard = ({ paths, onComplete, onViewResults }) => {
   const pick = (value) => {
     const next = { ...context, [step.id]: value };
     setContext(next);
+    mergeActiveTripContext({
+      destination: next.destination,
+      dates: next.dates,
+      travelers: next.travelers,
+      tripStyle: next.style,
+      accommodationStyle: next.accommodationStyle || next.style,
+      budget: next.budget,
+      priority: next.budget,
+      purpose: next.tripPurpose,
+    });
     setCustom('');
     setStepIdx((current) => firstOpenStep(getSteps(next.need || initialNeed, next), next, current + 1));
   };
@@ -323,12 +336,23 @@ export const GuidedTravelWizard = ({ paths, onComplete, onViewResults }) => {
   const confirm = async () => {
     if (loading) return;
     setLoading(true);
+    mergeActiveTripContext({
+      destination: context.destination,
+      dates: context.dates,
+      travelers: context.travelers,
+      tripStyle: context.style,
+      accommodationStyle: context.accommodationStyle || context.style,
+      budget: context.budget,
+      priority: context.budget,
+      purpose: context.tripPurpose,
+    });
     try {
       const response = await onComplete(buildFinalMessage(context));
       setResult({
         error: Boolean(response?.error),
         kind: response?.kind || null,
         count: response?.count || 0,
+        hotels: response?.hotels || [],
         text: response?.text || 'Não consegui acessar dados reais agora. Prefiro não te mostrar informações imprecisas. Tenta novamente daqui a pouquinho.',
       });
     } catch {
@@ -354,14 +378,41 @@ export const GuidedTravelWizard = ({ paths, onComplete, onViewResults }) => {
             <div className="text-[12.5px] font-medium text-ink-900">
               {result.error ? 'Não consegui concluir agora' : 'Recomendação preparada'}
             </div>
-            <div className="text-[13px] text-ink-800 leading-relaxed mt-1">
-              {result.text}
-            </div>
-            {result.kind === 'hotels' && !result.error && (
-              <button onClick={() => onViewResults?.('hotels')}
-                className="mt-3 h-8 px-3 rounded-full bg-ink-900 text-paper text-[12px] font-medium hover:bg-ink-800 inline-flex items-center gap-1.5">
-                Ver hotéis nos cards <Icon.ArrowRight size={11}/>
-              </button>
+            {result.kind === 'hotels' && !result.error && result.hotels?.length ? (
+              <div className="mt-3 flex gap-3 overflow-x-auto pb-1">
+                {result.hotels.map((hotel) => (
+                  <div key={hotel.id} className="min-w-[260px] max-w-[260px] bg-white border hairline rounded-xl overflow-hidden">
+                    <div className="h-[120px] bg-ink-100 overflow-hidden">
+                      {hotel.image && <img src={hotel.image} alt="" className="h-full w-full object-cover"/>}
+                    </div>
+                    <div className="p-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="text-[11px] text-ink-500 truncate">{hotel.provider || hotel.tag || 'provider'}</div>
+                        <div className="text-[11px] text-ink-700 inline-flex items-center gap-1"><Icon.Star size={10}/> {hotel.rating || 'A definir'}</div>
+                      </div>
+                      <div className="text-[13px] font-medium text-ink-900 mt-2 truncate">{hotel.name}</div>
+                      <div className="text-[11.5px] text-ink-500 mt-0.5 truncate">{hotel.city || 'A definir'}</div>
+                      <div className="text-[12px] text-ink-900 mt-2">{hotel.nightlyRate || hotel.price || 'Sob consulta'}</div>
+                      <div className="mt-3 flex gap-1.5">
+                        {hotel.bookingUrl && (
+                          <button onClick={() => window.open(hotel.bookingUrl, '_blank', 'noopener,noreferrer')}
+                            className="h-7 px-2.5 rounded-full bg-ink-900 text-paper text-[11.5px] font-medium inline-flex items-center gap-1">
+                            Reservar
+                          </button>
+                        )}
+                        <button onClick={() => { updateActiveContextFromHotel(hotel); applyHotelToProgressiveTrip(hotel); onViewResults?.('plan'); }}
+                          className="h-7 px-2.5 rounded-full border-half bg-white text-[11.5px] text-ink-800 inline-flex items-center gap-1">
+                          Aplicar ao roteiro
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-[13px] text-ink-800 leading-relaxed mt-1">
+                {result.text}
+              </div>
             )}
           </div>
         </div>

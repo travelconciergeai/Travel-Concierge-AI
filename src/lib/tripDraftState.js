@@ -1,4 +1,5 @@
 import { DATA_MODE, isRealDataMode } from './dataMode.js';
+import { getActiveTripContext, updateActiveContextFromHotel } from './activeTripContext.js';
 
 const TRIP_STORAGE_KEYS = {
   mock: 'voya_mock_trips',
@@ -44,8 +45,10 @@ function formatHotelPrice(hotel = {}) {
 }
 
 function buildProgressiveTrip(hotel, existing) {
-  const city = hotel.city || hotel.raw?.city || 'Destino';
-  const title = existing?.title || `${city} — roteiro em construção`;
+  const activeContext = getActiveTripContext();
+  const city = hotel.city || hotel.raw?.city || activeContext.city || activeContext.destination || 'A definir';
+  const destination = hotel.searchQuery?.destination || hotel.raw?.destination || activeContext.destination || city || 'A definir';
+  const title = existing?.title || `${destination} — roteiro em construção`;
   const hotelItem = {
     t: 'tarde',
     title: hotel.name,
@@ -62,10 +65,10 @@ function buildProgressiveTrip(hotel, existing) {
   return {
     id: existing?.id || `real-trip-${slug(city)}-${Date.now()}`,
     title,
-    dates: existing?.dates || 'Datas a definir',
+    dates: existing?.dates || activeContext.dates || activeContext.flexibility || 'A definir',
     state: 'Em planejamento',
-    travelers: existing?.travelers || 'A definir',
-    budget: existing?.budget || 'A definir',
+    travelers: existing?.travelers || activeContext.travelers || 'A definir',
+    budget: existing?.budget || activeContext.budget || activeContext.priority || 'A definir',
     tone: existing?.tone || tones[readPayload().length % tones.length],
     cover: existing?.cover || city,
     coverSeed: existing?.coverSeed || `real-trip-${slug(city)}`,
@@ -73,7 +76,7 @@ function buildProgressiveTrip(hotel, existing) {
     progress: Math.max(existing?.progress || 0, 24),
     blurb: `Roteiro progressivo com base em ${city}. Hotel aplicado; voos, passeios e dias ainda podem ser completados.`,
     baseCity: city,
-    destination: hotel.raw?.destination || city,
+    destination,
     appliedHotel: {
       id: hotel.id,
       name: hotel.name,
@@ -136,8 +139,9 @@ export function getMostRecentTrip() {
 
 export function applyHotelToProgressiveTrip(hotel) {
   if (isRealDataMode() && hotel.searchStatus !== 'live') return null;
+  updateActiveContextFromHotel(hotel);
   const trips = readPayload();
-  const city = hotel.city || hotel.raw?.city || 'Destino';
+  const city = hotel.city || hotel.raw?.city || 'A definir';
   const existingIndex = trips.findIndex((trip) => trip.baseCity === city || trip.appliedHotel?.id === hotel.id);
   const existing = existingIndex >= 0 ? trips[existingIndex] : null;
   const nextTrip = buildProgressiveTrip(hotel, existing);

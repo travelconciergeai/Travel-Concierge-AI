@@ -46,6 +46,7 @@ function detectIntent(message = '') {
   if (/wallet|cart[aã]o|cartao|milha|milhas|pontos/i.test(message)) return 'wallet-milhas';
   if (/agenda|calend[aá]rio|calendario/i.test(message)) return 'agenda';
   if (/pdf|exportar|compartilh[aá]vel|compartilhavel/i.test(message)) return 'pdf';
+  if (/mesmo destino|essa viagem|este roteiro|continuar viagem|continuar roteiro/i.test(message)) return 'roteiro';
   if (/decidir|recomenda|recomenda[cç][aã]o|melhor combina[cç][aã]o|pacote|combinar/i.test(message)) return 'recomendacao';
   if (/roteiro|montar|criar|planejar|plano|itiner[aá]rio|itinerario|alterar|editar|trocar|descanso|leve|ritmo/i.test(text)) return 'roteiro';
   if (/viajar|viagem|marido|esposa|casal|disney|fam[ií]lia|f[eé]rias/i.test(message)) return 'roteiro';
@@ -59,8 +60,26 @@ function normalizeText(value = '') {
     .toLowerCase();
 }
 
-function buildConversationText(messages = [], message = '') {
+function activeTripContextToText(context = {}) {
   return [
+    context.destination && `Destino: ${context.destination}.`,
+    context.city && `Cidade: ${context.city}.`,
+    context.country && `País: ${context.country}.`,
+    context.travelers && `Viajantes: ${context.travelers}.`,
+    context.dates && `Datas: ${context.dates}.`,
+    context.flexibility && `Flexibilidade: ${context.flexibility}.`,
+    context.tripStyle && `Estilo: ${context.tripStyle}.`,
+    context.accommodationStyle && `Hospedagem: ${context.accommodationStyle}.`,
+    context.budget && `Orçamento: ${context.budget}.`,
+    context.priority && `Prioridade: ${context.priority}.`,
+    context.purpose && `Propósito: ${context.purpose}.`,
+    context.hotel?.name && `Hotel aplicado: ${context.hotel.name}.`,
+  ].filter(Boolean).join(' ');
+}
+
+function buildConversationText(messages = [], message = '', activeTripContext = {}) {
+  return [
+    activeTripContextToText(activeTripContext),
     ...(messages || []).map((item) => item.content || item.text || ''),
     message,
   ].filter(Boolean).join('\n');
@@ -565,6 +584,7 @@ export function createChatHandler(env = process.env) {
       const body = await readJson(req);
       message = String(body.message || '').trim();
       messages = Array.isArray(body.messages) ? body.messages : [];
+      const activeTripContext = body.activeTripContext && typeof body.activeTripContext === 'object' ? body.activeTripContext : {};
 
       if (!message) {
         sendJson(res, 400, { error: 'Message is required' });
@@ -577,7 +597,7 @@ export function createChatHandler(env = process.env) {
       const intent = detectIntent(message);
       const realMode = isRealDataMode(env);
       let source = realMode ? 'openai' : 'mock';
-      const conversationText = buildConversationText(messages, message);
+      const conversationText = buildConversationText(messages, message, activeTripContext);
       const guided = shouldGuideIntent(intent, conversationText);
 
       if (realMode && ['passeio', 'wallet-milhas', 'agenda', 'pdf'].includes(intent)) {

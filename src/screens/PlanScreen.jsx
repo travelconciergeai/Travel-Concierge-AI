@@ -5,8 +5,9 @@ import { Placeholder, Button, Card, Drawer, Modal, OptimizeMenu, SectionHeader, 
 import { sendChatMessage } from "../lib/chatClient.js";
 import { planChatFallbackReply } from "../lib/planChatFallback.js";
 import { clonePlanState } from "../lib/planState.js";
-import { saveHotelSearchResults } from "../lib/hotelSearchState.js";
+import { mapHotelSearchResult, saveHotelSearchResults } from "../lib/hotelSearchState.js";
 import { saveFlightSearchResults } from "../lib/flightSearchState.js";
+import { mergeActiveTripContext } from "../lib/activeTripContext.js";
 import { isMockDataMode, isRealDataMode } from "../lib/dataMode.js";
 import { applyPlanAgentUpdate } from "../services/planVisualUpdateService.js";
 import { GuidedTravelWizard } from "../components/GuidedTravelWizard.jsx";
@@ -30,6 +31,13 @@ const FINAL_ERROR_SOURCES = ['tool-error', 'real-error', 'real-unavailable', 'cl
 function getLiveHotelSearch(response) {
   const result = response.hotelSearch || response.tools?.buscarHoteis;
   return result?.status === 'live' && result.options?.length ? result : null;
+}
+
+function mappedLiveHotels(hotelSearch) {
+  return (hotelSearch?.options || []).map((hotel, index) => mapHotelSearchResult(hotel, index, {
+    status: hotelSearch.status,
+    query: hotelSearch.query,
+  }));
 }
 
 const PlanScreen = ({ kickoff, clearKickoff, setRoute, trip }) => {
@@ -95,6 +103,7 @@ const PlanScreen = ({ kickoff, clearKickoff, setRoute, trip }) => {
         status: hotelSearch.status,
         query: hotelSearch.query,
       });
+      mergeActiveTripContext(hotelSearch.query || {});
     }
     if (response.tools?.buscarVoos?.options?.length) {
       saveFlightSearchResults(response.tools.buscarVoos.options, { status: response.tools.buscarVoos.status });
@@ -124,8 +133,9 @@ const PlanScreen = ({ kickoff, clearKickoff, setRoute, trip }) => {
     return {
       kind: hotelSearch ? 'hotels' : null,
       count: hotelSearch?.options?.length || 0,
+      hotels: mappedLiveHotels(hotelSearch),
       text: hotelSearch
-        ? `${hotelSearch.options.length} hotéis reais foram carregados nos cards de Hotéis. Abra os cards para reservar ou aplicar um hotel ao roteiro.`
+        ? ''
         : response.reply || (hasFinalError
         ? 'Não consegui acessar dados reais agora. Prefiro não te mostrar informações imprecisas. Tenta novamente daqui a pouquinho.'
         : planChatFallbackReply(t)),

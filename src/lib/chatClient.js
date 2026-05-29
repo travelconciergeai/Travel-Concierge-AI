@@ -1,4 +1,5 @@
 import { isRealDataMode } from './dataMode.js';
+import { activeTripContextToText, getActiveTripContext } from './activeTripContext.js';
 
 function normalizeText(value = '') {
   return String(value)
@@ -30,6 +31,7 @@ function hasOrigin(text) {
 function detectGuidedIntent(message) {
   if (/hotel|hoteis|hospedagem|pousada|resort/.test(message)) return 'hotel';
   if (/voo|voos|passagem|passagens|aereo|aerea/.test(message)) return 'voo';
+  if (/mesmo destino|essa viagem|este roteiro|continuar viagem|continuar roteiro/.test(message)) return 'roteiro';
   if (/roteiro|planejar|viagem|viajar|marido|esposa|casal|disney|ferias/.test(message)) return 'roteiro';
   return null;
 }
@@ -113,7 +115,9 @@ function extractGuidedContext(text = '', intent = 'geral') {
 }
 
 function buildLocalGuidedResponse(message, messages = []) {
+  const activeContext = getActiveTripContext();
   const text = normalizeText([
+    activeTripContextToText(activeContext),
     ...messages.map((item) => item.content || item.text || ''),
     message,
   ].filter(Boolean).join('\n'));
@@ -133,7 +137,7 @@ function buildLocalGuidedResponse(message, messages = []) {
     guidedPaths: {
       kind: intent,
       missing,
-      context: extractGuidedContext(text, intent),
+      context: { ...activeContext, ...extractGuidedContext(text, intent) },
       title: 'Vamos calibrar antes de buscar',
       subtitle: 'Escolha uma opção ou escreva com suas palavras.',
       options: [],
@@ -154,6 +158,7 @@ const clientFallback = (message) => {
 };
 
 export async function sendChatMessage({ message, messages = [] }) {
+  const activeTripContext = getActiveTripContext();
   const localGuided = buildLocalGuidedResponse(message, messages);
   if (localGuided) return localGuided;
 
@@ -161,7 +166,7 @@ export async function sendChatMessage({ message, messages = [] }) {
     const response = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message, messages }),
+      body: JSON.stringify({ message, messages, activeTripContext }),
     });
 
     if (!response.ok) throw new Error(`Chat request failed: ${response.status}`);

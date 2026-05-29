@@ -30,7 +30,7 @@ export function mapHotelSearchResult(hotel, index = 0, meta = {}) {
   return {
     id: hotel.id || `hotel-${index}`,
     name: hotel.name || 'Hotel sugerido',
-    city: hotel.city || 'Destino',
+    city: hotel.city || 'A definir',
     image: hotel.image || null,
     rating: hotel.rating || 0,
     reviewCount: hotel.reviewCount || 0,
