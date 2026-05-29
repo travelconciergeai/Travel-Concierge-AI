@@ -1,5 +1,5 @@
 import { DATA_MODE, isRealDataMode } from './dataMode.js';
-import { getActiveTripContext, updateActiveContextFromHotel } from './activeTripContext.js';
+import { getActiveTripContext, mergeActiveTripContext, updateActiveContextFromHotel } from './activeTripContext.js';
 
 const TRIP_STORAGE_KEYS = {
   mock: 'voya_mock_trips',
@@ -44,10 +44,56 @@ function formatHotelPrice(hotel = {}) {
   return nightly || total || 'valor a confirmar';
 }
 
+function normalizeText(value = '') {
+  return String(value)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .trim();
+}
+
+function isDestinationCompatible(destination = '', hotelCity = '') {
+  const contextDestination = normalizeText(destination);
+  const city = normalizeText(hotelCity);
+  if (!contextDestination || !city || contextDestination === 'a definir' || city === 'a definir') return true;
+  if (contextDestination.includes(city) || city.includes(contextDestination)) return true;
+
+  const aliasGroups = [
+    ['lisboa', 'lisbon'],
+    ['porto', 'oporto'],
+    ['roma', 'rome'],
+    ['florenca', 'florence'],
+    ['milao', 'milan'],
+    ['nova york', 'new york'],
+    ['toquio', 'tokyo'],
+  ];
+  if (aliasGroups.some((group) => group.some((alias) => contextDestination.includes(alias)) && group.some((alias) => city.includes(alias)))) return true;
+
+  const countryCities = {
+    portugal: ['lisboa', 'lisbon', 'porto', 'oporto', 'douro', 'lamego', 'sintra', 'cascais'],
+    argentina: ['buenos aires', 'mendoza', 'bariloche', 'ushuaia'],
+    brasil: ['sao paulo', 'rio de janeiro', 'salvador', 'florianopolis'],
+    estadosunidos: ['orlando', 'miami', 'nova york', 'new york', 'los angeles'],
+    franca: ['paris', 'nice', 'lyon', 'bordeaux'],
+    italia: ['roma', 'veneza', 'florenca', 'milao'],
+    japao: ['toquio', 'kyoto', 'osaka'],
+  };
+
+  const compactDestination = contextDestination.replace(/\s+/g, '');
+  return countryCities[compactDestination]?.some((knownCity) => city.includes(knownCity)) || false;
+}
+
+function formatTravelers(value) {
+  const text = String(value || '').trim();
+  if (!text) return 'A definir';
+  if (/^\d+$/.test(text)) return `${text} viajantes`;
+  return text;
+}
+
 function buildProgressiveTrip(hotel, existing) {
   const activeContext = getActiveTripContext();
   const city = hotel.city || hotel.raw?.city || activeContext.city || activeContext.destination || 'A definir';
-  const destination = hotel.searchQuery?.destination || hotel.raw?.destination || activeContext.destination || city || 'A definir';
+  const destination = activeContext.destination || activeContext.country || city || 'A definir';
   const title = existing?.title || `${destination} — roteiro em construção`;
   const hotelItem = {
     t: 'tarde',
@@ -67,8 +113,8 @@ function buildProgressiveTrip(hotel, existing) {
     title,
     dates: existing?.dates || activeContext.dates || activeContext.flexibility || 'A definir',
     state: 'Em planejamento',
-    travelers: existing?.travelers || activeContext.travelers || 'A definir',
-    budget: existing?.budget || activeContext.budget || activeContext.priority || 'A definir',
+    travelers: existing?.travelers || formatTravelers(activeContext.travelers),
+    budget: existing?.budget || activeContext.budget || 'A definir',
     tone: existing?.tone || tones[readPayload().length % tones.length],
     cover: existing?.cover || city,
     coverSeed: existing?.coverSeed || `real-trip-${slug(city)}`,
@@ -139,16 +185,29 @@ export function getMostRecentTrip() {
 
 export function applyHotelToProgressiveTrip(hotel) {
   if (isRealDataMode() && hotel.searchStatus !== 'live') return null;
+  const activeContext = getActiveTripContext();
+  const hotelCity = hotel.city || hotel.raw?.city || '';
+  const contextDestination = activeContext.destination || activeContext.city || hotel.searchQuery?.destination || hotel.raw?.destination || '';
+  if (!isDestinationCompatible(contextDestination, hotelCity)) return null;
+
   updateActiveContextFromHotel(hotel);
   const trips = readPayload();
-  const city = hotel.city || hotel.raw?.city || 'A definir';
-  const existingIndex = trips.findIndex((trip) => trip.baseCity === city || trip.appliedHotel?.id === hotel.id);
+  const city = hotelCity || activeContext.city || activeContext.destination || 'A definir';
+  const cityKey = normalizeText(city);
+  const destinationKey = normalizeText(activeContext.destination || hotel.searchQuery?.destination || '');
+  const existingIndex = trips.findIndex((trip) => (
+    trip.id === activeContext.tripId
+    || normalizeText(trip.baseCity) === cityKey
+    || (destinationKey && normalizeText(trip.destination) === destinationKey)
+    || trip.appliedHotel?.id === hotel.id
+  ));
   const existing = existingIndex >= 0 ? trips[existingIndex] : null;
   const nextTrip = buildProgressiveTrip(hotel, existing);
   const nextTrips = existingIndex >= 0
     ? trips.map((trip, index) => (index === existingIndex ? nextTrip : trip))
     : [nextTrip, ...trips];
   writePayload(nextTrips);
+  mergeActiveTripContext({ tripId: nextTrip.id });
   return nextTrip;
 }
 

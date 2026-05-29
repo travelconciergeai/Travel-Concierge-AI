@@ -20,7 +20,7 @@ const emptyRealTrip = {
   id: 'real-empty-trip',
   title: 'Roteiro',
   dates: 'A definir',
-  travelers: 0,
+  travelers: 'A definir',
   budget: 'A definir',
   blurb: 'Nenhum roteiro real carregado ainda.',
   days: [],
@@ -38,6 +38,13 @@ function mappedLiveHotels(hotelSearch) {
     status: hotelSearch.status,
     query: hotelSearch.query,
   }));
+}
+
+function formatTravelersLabel(value) {
+  const text = String(value || '').trim();
+  if (!text || text === '0') return 'A definir';
+  if (/^\d+$/.test(text)) return `${text} viajantes`;
+  return text;
 }
 
 const PlanScreen = ({ kickoff, clearKickoff, setRoute, trip }) => {
@@ -89,7 +96,7 @@ const PlanScreen = ({ kickoff, clearKickoff, setRoute, trip }) => {
       setTyping(false);
       setChat(c => [...c, {
         who: 'voya',
-        text: `Anotei: "${kickoff}". Já adaptei seu roteiro de Lisboa & Porto para refletir isso — olha à direita.`,
+        text: `Anotei: "${kickoff}". Já adaptei o roteiro ativo para refletir isso — olha à direita.`,
       }]);
       clearKickoff && clearKickoff();
     }, 1100);
@@ -285,7 +292,7 @@ const PlanScreen = ({ kickoff, clearKickoff, setRoute, trip }) => {
         adding={adding}
         onAdd={(payload) => { if (adding) addItem(adding.dayIdx, adding.slot, payload); setAdding(null); }}
       />
-      <ShareModal open={shareOpen} onClose={() => setShareOpen(false)} />
+      <ShareModal open={shareOpen} onClose={() => setShareOpen(false)} trip={planTrip} />
       <CalendarModal open={calOpen} onClose={() => setCalOpen(false)} days={days} />
       <ExportModal open={exportOpen} onClose={() => setExportOpen(false)} trip={planTrip} days={days}/>
     </div>
@@ -352,7 +359,7 @@ const PlanHeader = ({ trip, days, activeMode, onApplyMode, onShare, onCalendar, 
           <div className="mt-3 flex items-center gap-x-3 gap-y-1 text-[12.5px] text-ink-600 flex-wrap">
             <span className="inline-flex items-center gap-1.5"><Icon.Calendar size={13}/> {trip.dates}</span>
             <span className="text-ink-300">·</span>
-            <span className="inline-flex items-center gap-1.5"><Icon.Users size={13}/> {trip.travelers} viajantes</span>
+            <span className="inline-flex items-center gap-1.5"><Icon.Users size={13}/> {formatTravelersLabel(trip.travelers)}</span>
             <span className="text-ink-300">·</span>
             <span className="inline-flex items-center gap-1.5"><Icon.Coins size={13}/> {trip.budget}</span>
             <span className="text-ink-300">·</span>
@@ -776,17 +783,20 @@ const AddItemModal = ({ open, onClose, adding, onAdd }) => {
 };
 
 // ---------- Share modal ----------
-const ShareModal = ({ open, onClose }) => {
+const ShareModal = ({ open, onClose, trip }) => {
   const [copied, setCopied] = useState(false);
+  const destination = trip?.destination || trip?.title || 'A definir';
+  const coverLabel = trip?.coverLabel || trip?.baseCity || trip?.destination || 'A definir';
+  const summary = `${trip?.dates || 'A definir'} · ${formatTravelersLabel(trip?.travelers)} · roteiro vivo`;
   return (
     <Modal open={open} onClose={onClose} title="Compartilhar roteiro"
       footer={<Button variant="ghost" onClick={onClose}>Fechar</Button>}>
       <div className="space-y-4">
         <div className="bg-ink-50 rounded-xl p-4 flex items-center gap-3">
-          <Placeholder tone="warm" label="Portugal" className="h-14 w-20 rounded-lg shrink-0"/>
+          <Placeholder tone={trip?.cover || 'warm'} label={coverLabel} className="h-14 w-20 rounded-lg shrink-0"/>
           <div>
-            <div className="text-[14px] font-medium text-ink-900">Portugal — Lisboa & Porto</div>
-            <div className="text-[12px] text-ink-500">10 dias · 2 viajantes · roteiro vivo</div>
+            <div className="text-[14px] font-medium text-ink-900">{destination}</div>
+            <div className="text-[12px] text-ink-500">{summary}</div>
           </div>
         </div>
         <div>
@@ -885,7 +895,7 @@ const ExportModal = ({ open, onClose, trip, days }) => {
           <div className="border-b hairline pb-4 mb-4">
             <div className="label">Voya · roteiro exportado</div>
             <div className="text-[20px] font-medium tracking-tight text-ink-900 mt-1">{trip.title}</div>
-            <div className="text-[12px] text-ink-600 mt-1">{trip.dates} · {trip.travelers} viajantes · {trip.blurb}</div>
+            <div className="text-[12px] text-ink-600 mt-1">{trip.dates} · {formatTravelersLabel(trip.travelers)} · {trip.blurb}</div>
           </div>
           <div className="space-y-4">
             {days.slice(0,2).map(d => (

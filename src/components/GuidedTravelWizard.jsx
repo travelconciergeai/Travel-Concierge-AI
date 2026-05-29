@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Icon } from '../icons.jsx';
-import { getActiveTripContext, mergeActiveTripContext, updateActiveContextFromHotel } from '../lib/activeTripContext.js';
+import { getActiveTripContext, mergeActiveTripContext } from '../lib/activeTripContext.js';
 import { applyHotelToProgressiveTrip } from '../lib/tripDraftState.js';
 
 const needs = [
@@ -320,6 +320,8 @@ export const GuidedTravelWizard = ({ paths, onComplete, onViewResults }) => {
       tripStyle: next.style,
       accommodationStyle: next.accommodationStyle || next.style,
       budget: next.budget,
+      userProvidedBudget: Boolean(next.budget),
+      userProvidedDates: Boolean(next.dates),
       priority: next.budget,
       purpose: next.tripPurpose,
     });
@@ -343,6 +345,8 @@ export const GuidedTravelWizard = ({ paths, onComplete, onViewResults }) => {
       tripStyle: context.style,
       accommodationStyle: context.accommodationStyle || context.style,
       budget: context.budget,
+      userProvidedBudget: Boolean(context.budget),
+      userProvidedDates: Boolean(context.dates),
       priority: context.budget,
       purpose: context.tripPurpose,
     });
@@ -366,6 +370,51 @@ export const GuidedTravelWizard = ({ paths, onComplete, onViewResults }) => {
   };
 
   if (result) {
+    if (result.kind === 'hotels' && !result.error && result.hotels?.length) {
+      return (
+        <div className="mt-4 flex gap-3 overflow-x-auto pb-1 fade-up">
+          {result.hotels.map((hotel) => (
+            <div key={hotel.id} className="min-w-[260px] max-w-[260px] bg-white border hairline rounded-xl overflow-hidden">
+              <div className="h-[120px] bg-ink-100 overflow-hidden">
+                {hotel.image && <img src={hotel.image} alt="" className="h-full w-full object-cover"/>}
+              </div>
+              <div className="p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="text-[11px] text-ink-500 truncate">{hotel.provider || hotel.tag || 'provider'}</div>
+                  <div className="text-[11px] text-ink-700 inline-flex items-center gap-1"><Icon.Star size={10}/> {hotel.rating || 'A definir'}</div>
+                </div>
+                <div className="text-[13px] font-medium text-ink-900 mt-2 truncate">{hotel.name}</div>
+                <div className="text-[11.5px] text-ink-500 mt-0.5 truncate">{hotel.city || 'A definir'}</div>
+                <div className="text-[12px] text-ink-900 mt-2">{hotel.nightlyRate || hotel.price || 'Sob consulta'}</div>
+                <div className="mt-3 flex gap-1.5">
+                  {hotel.bookingUrl && (
+                    <button onClick={() => window.open(hotel.bookingUrl, '_blank', 'noopener,noreferrer')}
+                      className="h-7 px-2.5 rounded-full bg-ink-900 text-paper text-[11.5px] font-medium inline-flex items-center gap-1">
+                      Reservar
+                    </button>
+                  )}
+                  <button onClick={() => {
+                    const trip = applyHotelToProgressiveTrip(hotel);
+                    if (!trip) {
+                      setResult({
+                        error: true,
+                        text: 'Esse hotel não combina com o contexto atual da viagem. Prefiro não aplicar dados conflitantes ao roteiro.',
+                      });
+                      return;
+                    }
+                    onViewResults?.('plan');
+                  }}
+                    className="h-7 px-2.5 rounded-full border-half bg-white text-[11.5px] text-ink-800 inline-flex items-center gap-1">
+                    Aplicar ao roteiro
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      );
+    }
+
     return (
       <div className="mt-4 bg-white border-half rounded-2xl p-4 shadow-soft fade-up">
         <div className="flex items-start gap-3">
@@ -378,42 +427,9 @@ export const GuidedTravelWizard = ({ paths, onComplete, onViewResults }) => {
             <div className="text-[12.5px] font-medium text-ink-900">
               {result.error ? 'Não consegui concluir agora' : 'Recomendação preparada'}
             </div>
-            {result.kind === 'hotels' && !result.error && result.hotels?.length ? (
-              <div className="mt-3 flex gap-3 overflow-x-auto pb-1">
-                {result.hotels.map((hotel) => (
-                  <div key={hotel.id} className="min-w-[260px] max-w-[260px] bg-white border hairline rounded-xl overflow-hidden">
-                    <div className="h-[120px] bg-ink-100 overflow-hidden">
-                      {hotel.image && <img src={hotel.image} alt="" className="h-full w-full object-cover"/>}
-                    </div>
-                    <div className="p-3">
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="text-[11px] text-ink-500 truncate">{hotel.provider || hotel.tag || 'provider'}</div>
-                        <div className="text-[11px] text-ink-700 inline-flex items-center gap-1"><Icon.Star size={10}/> {hotel.rating || 'A definir'}</div>
-                      </div>
-                      <div className="text-[13px] font-medium text-ink-900 mt-2 truncate">{hotel.name}</div>
-                      <div className="text-[11.5px] text-ink-500 mt-0.5 truncate">{hotel.city || 'A definir'}</div>
-                      <div className="text-[12px] text-ink-900 mt-2">{hotel.nightlyRate || hotel.price || 'Sob consulta'}</div>
-                      <div className="mt-3 flex gap-1.5">
-                        {hotel.bookingUrl && (
-                          <button onClick={() => window.open(hotel.bookingUrl, '_blank', 'noopener,noreferrer')}
-                            className="h-7 px-2.5 rounded-full bg-ink-900 text-paper text-[11.5px] font-medium inline-flex items-center gap-1">
-                            Reservar
-                          </button>
-                        )}
-                        <button onClick={() => { updateActiveContextFromHotel(hotel); applyHotelToProgressiveTrip(hotel); onViewResults?.('plan'); }}
-                          className="h-7 px-2.5 rounded-full border-half bg-white text-[11.5px] text-ink-800 inline-flex items-center gap-1">
-                          Aplicar ao roteiro
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-[13px] text-ink-800 leading-relaxed mt-1">
-                {result.text}
-              </div>
-            )}
+            <div className="text-[13px] text-ink-800 leading-relaxed mt-1">
+              {result.text}
+            </div>
           </div>
         </div>
       </div>

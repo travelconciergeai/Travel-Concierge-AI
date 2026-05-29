@@ -21,6 +21,7 @@ const EMPTY_CONTEXT = {
   budget: '',
   priority: '',
   purpose: '',
+  tripId: '',
 };
 
 function compact(value) {
@@ -30,14 +31,14 @@ function compact(value) {
 }
 
 function normalizePatch(patch = {}) {
-  const dateRange = patch.dates || (patch.checkIn || patch.checkOut
+  const dateRange = patch.dates || ((patch.userProvidedDates && (patch.checkIn || patch.checkOut))
     ? [patch.checkIn, patch.checkOut].filter(Boolean).join(' → ')
     : '');
   const normalized = {
     destination: patch.destination || patch.city || '',
     city: patch.city || patch.destination || '',
     country: patch.country || '',
-    travelers: patch.travelers || patch.profile || (patch.guests ? `${patch.guests} viajantes` : ''),
+    travelers: patch.travelers || patch.profile || '',
     dates: dateRange,
     flexibility: patch.flexibility || (String(dateRange || '').includes('flex') ? 'flexível' : ''),
     hotel: patch.hotel || null,
@@ -45,9 +46,10 @@ function normalizePatch(patch = {}) {
     tours: patch.tours || [],
     tripStyle: patch.tripStyle || patch.style || '',
     accommodationStyle: patch.accommodationStyle || '',
-    budget: patch.budget || '',
+    budget: patch.userProvidedBudget ? patch.budget || '' : '',
     priority: patch.priority || patch.priorities?.[0] || '',
     purpose: patch.purpose || patch.tripPurpose || '',
+    tripId: patch.tripId || '',
   };
   return Object.fromEntries(Object.entries(normalized).map(([key, value]) => [key, compact(value)]).filter(([, value]) => {
     if (Array.isArray(value)) return value.length > 0;
@@ -82,9 +84,10 @@ export function mergeActiveTripContext(patch = {}) {
 }
 
 export function updateActiveContextFromHotel(hotel = {}) {
+  const current = getActiveTripContext();
   return mergeActiveTripContext({
-    destination: hotel.searchQuery?.destination || hotel.raw?.destination || hotel.city,
-    city: hotel.city,
+    destination: current.destination || hotel.searchQuery?.destination || hotel.raw?.destination || hotel.city,
+    city: hotel.city || current.city,
     hotel: {
       id: hotel.id,
       name: hotel.name,

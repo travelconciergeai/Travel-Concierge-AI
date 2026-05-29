@@ -58,7 +58,7 @@ const TripsScreen = ({ setRoute, setActiveTripId }) => {
                   <button className="p-1.5 rounded-md hover:bg-ink-100 text-ink-500"><Icon.MoreH size={14}/></button>
                 </div>
                 <div className="text-[17px] font-medium tracking-tight text-ink-900 mt-3 leading-snug">{t.title}</div>
-                <div className="text-[12.5px] text-ink-500 mt-1">{t.dates} · {t.travelers} viajantes</div>
+                <div className="text-[12.5px] text-ink-500 mt-1">{t.dates} · {formatTravelersLabel(t.travelers)}</div>
                 {t.appliedHotel && (
                   <div className="text-[12px] text-sage-700 mt-2 flex items-center gap-1.5">
                     <Icon.Bed size={11}/> {t.appliedHotel.name}
@@ -94,6 +94,13 @@ const TripsScreen = ({ setRoute, setActiveTripId }) => {
     </div>
   );
 };
+
+function formatTravelersLabel(value) {
+  const text = String(value || '').trim();
+  if (!text || text === '0') return 'A definir';
+  if (/^\d+$/.test(text)) return `${text} viajantes`;
+  return text;
+}
 
 function mapState(s) {
   if (s === 'Roteiro vivo') return 'ativas';

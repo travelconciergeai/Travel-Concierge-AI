@@ -27,7 +27,7 @@ const HotelsScreen = ({ setRoute, setActiveTripId }) => {
   const applyToTrip = (hotel) => {
     const trip = applyHotelToProgressiveTrip(hotel);
     if (!trip) {
-      toast({ title: 'Hotel não aplicado', desc: 'Use um resultado real antes de criar o roteiro.', tone: 'info' });
+      toast({ title: 'Hotel não aplicado', desc: 'Esse hotel não combina com o destino da viagem ativa.', tone: 'info' });
       return;
     }
     setActiveTripId?.(trip.id);
