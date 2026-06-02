@@ -2,8 +2,8 @@
 <html lang="pt-BR">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=1280" />
-  <title>Voya — Concierge de viagens com IA</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Gaid — Concierge de viagens com IA</title>
 
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -20,7 +20,6 @@
             mono: ['Inter', 'ui-monospace', 'monospace'],
           },
           colors: {
-            // Pure neutral grayscale — chroma = 0 everywhere.
             ink: {
               900: 'oklch(0.18 0 0)',
               800: 'oklch(0.26 0 0)',
@@ -36,8 +35,6 @@
             paper:  'oklch(1 0 0)',
             canvas: 'oklch(0.978 0 0)',
             edge:   'oklch(0.91 0 0)',
-            // Legacy accent names mapped to grayscale steps so existing classes
-            // keep working without rewriting every screen.
             brand: {
               50:  'oklch(0.965 0 0)',
               100: 'oklch(0.93 0 0)',
@@ -77,100 +74,23 @@
   <style>
     html, body { background: oklch(0.978 0 0); color: oklch(0.18 0 0); }
     body { font-family: 'Inter', system-ui, sans-serif; font-feature-settings: 'cv11','ss01','ss03'; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
-    /* editorial italic moment, now Inter italic */
     .serif-i { font-family: 'Inter', sans-serif; font-style: italic; font-weight: 400; letter-spacing: -0.015em; color: oklch(0.40 0 0); }
     .mono { font-family: 'Inter', sans-serif; font-feature-settings: 'tnum','zero'; font-variant-numeric: tabular-nums; }
-    /* scrollbar */
     *::-webkit-scrollbar { width: 10px; height: 10px; }
     *::-webkit-scrollbar-thumb { background: oklch(0.86 0 0); border-radius: 8px; border: 2px solid transparent; background-clip: content-box; }
-    *::-webkit-scrollbar-thumb:hover { background: oklch(0.74 0 0); border: 2px solid transparent; background-clip: content-box; }
-    /* nice focus — only on buttons/links. Inputs handle focus via their container. */
-    button:focus-visible, a:focus-visible {
-      outline: 2px solid oklch(0.45 0 0 / 0.5);
-      outline-offset: 2px;
-      border-radius: 6px;
-    }
+    button:focus-visible, a:focus-visible { outline: 2px solid oklch(0.45 0 0 / 0.5); outline-offset: 2px; border-radius: 6px; }
     input, textarea, select { outline: none !important; box-shadow: none !important; }
-    input:focus, textarea:focus, select:focus { outline: none !important; }
-    /* hairline 0.5px borders (retina-aware) */
     .border-half { border: 0.5px solid oklch(0.86 0 0); }
-    @media (-webkit-min-device-pixel-ratio: 2), (min-resolution: 2dppx) {
-      .border-half { border-width: 0.5px; }
-    }
-    /* typing dots */
+    .hairline { border-color: oklch(0.91 0 0); }
+    .label { font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; font-weight: 500; color: oklch(0.50 0 0); }
     @keyframes blink { 0%, 80%, 100% { opacity: 0.2 } 40% { opacity: 1 } }
     .dot { animation: blink 1.2s infinite; }
     .dot:nth-child(2) { animation-delay: .15s; }
     .dot:nth-child(3) { animation-delay: .3s; }
-    /* shimmer */
-    @keyframes shimmer { 0% { background-position: -200% 0 } 100% { background-position: 200% 0 } }
-    .shimmer { background: linear-gradient(90deg, oklch(0.95 0 0), oklch(0.98 0 0), oklch(0.95 0 0)); background-size: 200% 100%; animation: shimmer 2s linear infinite; }
-    /* placeholder stripes — all grayscale variants at different lightness */
-    .ph-stripes {
-      background-color: oklch(0.93 0 0);
-      background-image: repeating-linear-gradient(135deg, oklch(0.91 0 0) 0 12px, oklch(0.93 0 0) 12px 24px);
-    }
-    .ph-warm {
-      background-color: oklch(0.90 0 0);
-      background-image: repeating-linear-gradient(135deg, oklch(0.88 0 0) 0 12px, oklch(0.90 0 0) 12px 24px);
-    }
-    .ph-cool {
-      background-color: oklch(0.87 0 0);
-      background-image: repeating-linear-gradient(135deg, oklch(0.85 0 0) 0 12px, oklch(0.87 0 0) 12px 24px);
-    }
-    .ph-sage {
-      background-color: oklch(0.92 0 0);
-      background-image: repeating-linear-gradient(135deg, oklch(0.90 0 0) 0 12px, oklch(0.92 0 0) 12px 24px);
-    }
-    .ph-coral {
-      background-color: oklch(0.84 0 0);
-      background-image: repeating-linear-gradient(135deg, oklch(0.82 0 0) 0 12px, oklch(0.84 0 0) 12px 24px);
-    }
-    .ph-ink {
-      background-color: oklch(0.26 0 0);
-      background-image: repeating-linear-gradient(135deg, oklch(0.24 0 0) 0 12px, oklch(0.26 0 0) 12px 24px);
-      color: white;
-    }
-    /* card hover */
-    .card-h { transition: transform .25s ease, box-shadow .25s ease, border-color .2s ease; }
-    .card-h:hover { transform: translateY(-2px); box-shadow: 0 12px 32px -16px oklch(0.20 0.01 250 / 0.18); }
-    /* fade up */
-    @keyframes fadeUp { from { opacity: 0; transform: translateY(8px) } to { opacity: 1; transform: none } }
-    .fade-up { animation: fadeUp .35s ease both; }
-    /* divider */
-    .hairline { border-color: oklch(0.91 0 0); }
-    /* selection */
-    ::selection { background: oklch(0.86 0 0); color: oklch(0.18 0 0); }
-    /* small caps label */
-    .label { font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; font-weight: 500; color: oklch(0.50 0 0); }
-    /* dropdown menu */
-    @keyframes popDown { from { opacity: 0; transform: translateY(-4px) scale(.98) } to { opacity: 1; transform: none } }
-    .pop-down { animation: popDown .14s ease-out both; transform-origin: top right; }
-    /* right-side drawer */
-    @keyframes slideInRight { from { transform: translateX(24px); opacity: 0 } to { transform: none; opacity: 1 } }
-    .slide-right { animation: slideInRight .28s cubic-bezier(.2,.7,.2,1) both; }
-    /* image cards — subtle grayscale guarantee so they stay editorial */
-    .img-grayscale { filter: grayscale(1) contrast(1.02); }
-    /* shimmery text (used in the generation animation) */
-    .shimmer-text {
-      background: linear-gradient(90deg,
-        oklch(0.55 0 0) 0%,
-        oklch(0.55 0 0) 30%,
-        oklch(0.20 0 0) 50%,
-        oklch(0.55 0 0) 70%,
-        oklch(0.55 0 0) 100%
-      );
-      background-size: 200% 100%;
-      -webkit-background-clip: text;
-      background-clip: text;
-      color: transparent;
-      animation: shimmer 2.6s linear infinite;
-    }
   </style>
-
 </head>
 <body class="min-h-screen">
   <div id="root"></div>
-  <script type="module" src="/src/main.jsx"></script>
+  <script type="module" src="/app/main.jsx"></script>
 </body>
 </html>
